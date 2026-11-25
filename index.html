@@ -784,8 +784,8 @@ function LeadSheet({ lead, patchLead, close, goMessage }) {
 
 /* ============ Strona: Wiadomości ============ */
 function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLead }) {
-  // Zatwierdzone (do wysłania) zawsze, także bez szkicu; ocenione tylko gdy mają szkic do zatwierdzenia.
-  const drafts = data.leads.filter(l => l.status === 'do_wyslania' || (l.status === 'oceniony' && l.draft))
+  // Tylko leady zatwierdzone do wysłania (zatwierdza się w Leady), także bez szkicu.
+  const drafts = data.leads.filter(l => l.status === 'do_wyslania')
     .sort((a, b) => (a.status === 'do_wyslania' ? -1 : 1) - (b.status === 'do_wyslania' ? -1 : 1) || (b.score || 0) - (a.score || 0));
   const follows = data.leads.filter(isFollowDue);
   const list = tab === 'follow' ? follows : drafts;
@@ -806,11 +806,11 @@ function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLea
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h2 className="text-[32px] font-medium leading-tight">Wiadomości</h2>
-        <Tabs value={tab} onChange={v => { persist(); setTab(v); setSelected(null); }} items={[{ value: 'szkice', label: 'Szkice', count: drafts.length }, { value: 'follow', label: 'Follow-upy', count: follows.length }]} />
+        <Tabs value={tab} onChange={v => { persist(); setTab(v); setSelected(null); }} items={[{ value: 'szkice', label: 'Do wysłania', count: drafts.length }, { value: 'follow', label: 'Follow-upy', count: follows.length }]} />
       </div>
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <Card className="h-fit p-2">
-          {list.length === 0 && <p className="p-4 text-sm text-fg3">{tab === 'follow' ? 'Brak follow-upów na dziś' : 'Brak szkiców. Pojawią się po ocenie nowych leadów'}</p>}
+          {list.length === 0 && <p className="p-4 text-sm text-fg3">{tab === 'follow' ? 'Brak follow-upów na dziś' : 'Brak wiadomości do wysłania. Najpierw zatwierdź lead w zakładce Leady (przycisk Zatwierdź do wysłania)'}</p>}
           {list.map(l => (
             <button key={l.id} onClick={() => { persist(); setSelected(l.id); }}
               className={cn('flex w-full flex-col gap-1 rounded-lg px-3 py-3 text-left transition-colors duration-150', cur && cur.id === l.id ? 'bg-raised shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'hover:bg-fg/[0.03]')}>
@@ -1301,7 +1301,7 @@ function App() {
   };
   const elapsed = session ? Math.floor((now - session.start) / 1000) : 0;
   const lead = data.leads.find(l => l.id === openId);
-  const badge = { leady: data.leads.filter(l => l.status === 'nowy' || l.status === 'oceniony').length, wiadomosci: data.leads.filter(l => l.status === 'do_wyslania' || (l.status === 'oceniony' && l.draft)).length + data.leads.filter(isFollowDue).length };
+  const badge = { leady: data.leads.filter(l => l.status === 'nowy' || l.status === 'oceniony').length, wiadomosci: data.leads.filter(l => l.status === 'do_wyslania').length + data.leads.filter(isFollowDue).length };
   const current = NAV.find(n => n.id === page);
   const pending = getPending().length;
 
