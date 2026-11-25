@@ -72,6 +72,7 @@ const cn = (...a) => a.filter(Boolean).join(' ');
 
 /* ============ Ikony (lucide, 16px, kreska 1.5) ============ */
 const ICONS = {
+  menu: '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
   dashboard: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
@@ -1096,6 +1097,7 @@ function App() {
   const [msgSel, setMsgSel] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [gh, setGh] = useState(() => !!getToken());
@@ -1290,15 +1292,15 @@ function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 border-b border-fg/[0.06] bg-bg/90 backdrop-blur">
           <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-8">
-            <div className="flex items-center gap-2.5 text-sm text-fg2"><Icon name={current.icon} className="h-4 w-4 text-fg3" />{current.label}</div>
+            <div className="flex items-center gap-2.5 text-sm text-fg2">
+              <button onClick={() => setMenuOpen(true)} aria-label="Otwórz menu" className="-ml-2 flex h-10 w-10 items-center justify-center rounded-lg text-fg hover:bg-fg/[0.05] md:hidden"><Icon name="menu" className="h-6 w-6" /></button>
+              <Icon name={current.icon} className="hidden h-4 w-4 text-fg3 md:block" /><span className="text-base text-fg md:text-sm md:text-fg2">{current.label}</span>
+            </div>
             <div className="flex items-center gap-3">
               <SaveState />
               <Button variant="accent" size="sm" onClick={() => setSearchOpen(true)}><Icon name="search" /><span className="hidden sm:inline">Nowi klienci</span></Button>
             </div>
           </div>
-          <nav className="scroll-thin flex gap-1 overflow-x-auto border-t border-fg/[0.06] px-2 py-2 md:hidden">
-            {NAV.map(n => <button key={n.id} onClick={() => go(n.id)} className={cn('flex h-8 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[0.9375rem]', page === n.id ? 'bg-raised text-fg' : 'text-fg3')}><Icon name={n.icon} className="h-4 w-4" />{n.label}</button>)}
-          </nav>
         </header>
         <main key={page} className="a-rise mx-auto w-full max-w-[1520px] flex-1 p-4 sm:p-8">
           {page === 'pulpit' && <Dashboard data={data} go={go} />}
@@ -1307,6 +1309,25 @@ function App() {
           {page === 'ustawienia' && <Settings data={data} patchSettings={patchSettings} conn={conn} connect={connect} refresh={() => refresh(false)} gh={gh} ghConnect={ghConnect} ghDisconnect={ghDisconnect} fcKey={fcKey} saveFcKey={saveFcKey} />}
         </main>
       </div>
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="a-fade absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
+          <div className="a-slide absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col border-r border-fg/[0.08] bg-side">
+            <div className="flex h-14 items-center justify-between px-5">
+              <div className="leading-tight"><div className="text-base font-medium">Klienci</div><div className="font-mono text-[0.8125rem] text-fg3">pawelmotion</div></div>
+              <button onClick={() => setMenuOpen(false)} aria-label="Zamknij menu" className="flex h-10 w-10 items-center justify-center rounded-lg text-fg2 hover:bg-fg/[0.05]"><Icon name="x" className="h-5 w-5" /></button>
+            </div>
+            <nav className="space-y-1 px-3 pt-4">
+              {NAV.map(n => (
+                <button key={n.id} onClick={() => { go(n.id); setMenuOpen(false); }} className={cn('flex h-12 w-full items-center gap-3 rounded-lg px-3 text-base transition-colors duration-150', page === n.id ? 'bg-raised text-fg ring-1 ring-fg/[0.06]' : 'text-fg2 hover:bg-fg/[0.03] hover:text-fg')}>
+                  <Icon name={n.icon} className={cn('h-5 w-5', page === n.id ? 'text-fg' : 'text-fg3')} />{n.label}
+                  {badge[n.id] > 0 && <span className="ml-auto font-mono text-sm text-fg3">{badge[n.id]}</span>}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
       <LeadSheet lead={lead} patchLead={patchLead} close={() => setOpenId(null)} goMessage={id => { setOpenId(null); setPage('wiadomosci'); setMsgTab('szkice'); setMsgSel(id); }} />
       <SearchInfo open={searchOpen} onClose={() => setSearchOpen(false)} lastSearch={data.lastSearch} search={search} start={startSearch} scoreNow={scoreNow} unscored={data.leads.filter(l => l.status === 'nowy').length} hasKey={!!fcKey} goSettings={() => go('ustawienia')} />
       <Toaster />
