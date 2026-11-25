@@ -748,16 +748,18 @@ function LeadSheet({ lead, patchLead, close, goMessage }) {
 
 /* ============ Strona: Wiadomości ============ */
 function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLead }) {
-  const drafts = data.leads.filter(l => (l.status === 'do_wyslania' || l.status === 'oceniony') && l.draft)
+  // Zatwierdzone (do wysłania) zawsze, także bez szkicu; ocenione tylko gdy mają szkic do zatwierdzenia.
+  const drafts = data.leads.filter(l => l.status === 'do_wyslania' || (l.status === 'oceniony' && l.draft))
     .sort((a, b) => (a.status === 'do_wyslania' ? -1 : 1) - (b.status === 'do_wyslania' ? -1 : 1) || (b.score || 0) - (a.score || 0));
   const follows = data.leads.filter(isFollowDue);
   const list = tab === 'follow' ? follows : drafts;
   const cur = list.find(l => l.id === selected) || list[0];
-  const saved = cur ? (tab === 'follow' ? (cur.followDraft || makeFollowup(cur)) : cur.draft) : null;
+  const saved = cur ? (tab === 'follow' ? (cur.followDraft || makeFollowup(cur)) : (cur.draft || { subject: '', body: '' })) : null;
+  const noDraft = cur && tab !== 'follow' && !cur.draft;
   const [msg, setMsg] = useState(saved);
   useEffect(() => { setMsg(saved); }, [cur && cur.id, tab]);
   const words = msg ? msg.body.trim().split(/\s+/).length : 0;
-  const persist = () => { if (!cur || !msg) return; if (JSON.stringify(msg) === JSON.stringify(saved)) return; patchLead(cur.id, tab === 'follow' ? { followDraft: msg } : { draft: msg }); };
+  const persist = () => { if (!cur || !msg) return; if (JSON.stringify(msg) === JSON.stringify(saved)) return; if (noDraft && !msg.subject.trim() && !msg.body.trim()) return; patchLead(cur.id, tab === 'follow' ? { followDraft: msg } : { draft: msg }); };
   const markSent = () => {
     persist();
     if (tab === 'follow') { patchLead(cur.id, { followupAt: iso(TODAY) }); toast('Follow-up oznaczony jako wysłany', cur.org); }
@@ -799,7 +801,7 @@ function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLea
                 <div className="flex items-center justify-between"><Label>Treść</Label><span className={cn('font-mono text-xs tabular-nums', words > 130 ? 'text-accent' : 'text-fg3')}>{words} / 120 słów</span></div>
                 <Textarea rows="14" value={msg.body} onChange={e => setMsg({ ...msg, body: e.target.value })} onBlur={persist} />
               </div>
-              <p className="flex items-start gap-2 text-[0.9375rem] text-fg3"><Icon name="info" className="mt-0.5 h-4 w-4" />Szkic napisało AI. Sprawdź fakty w źródle i wyślij sam, pojedynczo, ze swojej poczty</p>
+              <p className="flex items-start gap-2 text-[0.9375rem] text-fg3"><Icon name="info" className="mt-0.5 h-4 w-4" />{noDraft ? 'Ten lead nie ma jeszcze szkicu. Napisz wiadomość sam: zapisze się, gdy klikniesz poza polem. Sprawdź fakty w źródle i wyślij ze swojej poczty' : 'Szkic napisało AI. Sprawdź fakty w źródle i wyślij sam, pojedynczo, ze swojej poczty'}</p>
             </div>
             <div className="mt-6 flex flex-wrap gap-2 border-t border-fg/[0.06] p-6">
               <Button variant="secondary" onClick={async () => toast(await copyText(msg.subject + '\n\n' + withSig(msg.body, data.settings.signature)) ? 'Skopiowano do schowka' : 'Nie udało się skopiować', 'Wklej do swojej poczty')}><Icon name="copy" />Kopiuj</Button>
@@ -1254,7 +1256,7 @@ function App() {
   };
   const elapsed = session ? Math.floor((now - session.start) / 1000) : 0;
   const lead = data.leads.find(l => l.id === openId);
-  const badge = { leady: data.leads.filter(l => l.status === 'nowy' || l.status === 'oceniony').length, wiadomosci: data.leads.filter(l => l.status === 'do_wyslania').length + data.leads.filter(isFollowDue).length };
+  const badge = { leady: data.leads.filter(l => l.status === 'nowy' || l.status === 'oceniony').length, wiadomosci: data.leads.filter(l => l.status === 'do_wyslania' || (l.status === 'oceniony' && l.draft)).length + data.leads.filter(isFollowDue).length };
   const current = NAV.find(n => n.id === page);
   const pending = getPending().length;
 
