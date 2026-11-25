@@ -242,6 +242,7 @@ function applyOp(d, op) {
   if (op.type === 'session') return { ...d, sessions: [...d.sessions, op.entry] };
   if (op.type === 'settings') return { ...d, settings: { ...d.settings, ...op.patch } };
   if (op.type === 'patchLeads') return { ...d, leads: d.leads.map(l => op.patches[l.id] && l.status === 'nowy' ? { ...l, ...op.patches[l.id] } : l) };
+  if (op.type === 'addDrafts') return { ...d, leads: d.leads.map(l => op.drafts[l.id] && !l.draft ? { ...l, draft: op.drafts[l.id] } : l) };
   if (op.type === 'addLeads') {
     const doms = new Set(d.leads.map(l => l.website)), ids = new Set(d.leads.map(l => l.id));
     const add = op.leads.filter(l => !ids.has(l.id) && !doms.has(l.website));
@@ -380,6 +381,40 @@ function scoreLead(lead, page) {
   };
 }
 
+// Szablony wiadomości (zaakceptowane 25.11.2026). Pomysł i „dlaczego” zależą od dobranego projektu.
+const TEMPLATE_IDEAS = {
+  6: { pl: ['Na jubileusz można przygotować krótki film 3D, który pokaże historię miejsca i wspólnoty.', 'To film jubileuszowy, który opowiada historię i architekturę miejsca.'],
+       en: ['For the anniversary, I could create a short 3D film that tells the story of the place and its community.', 'It is an anniversary film that tells the history and architecture of a place.'] },
+  5: { pl: ['Można przygotować krótki animowany spot, który zaprosi młodych do udziału i pokaże najważniejsze informacje.', 'Był skierowany do młodych i zachęcał do udziału w ŚDM.'],
+       en: ['I could create a short animated spot that invites young people to take part and shows the key information.', 'It was made for young people and encouraged them to join World Youth Day.'] },
+  4: { pl: ['Można przygotować krótki animowany spot z datą i miejscem wydarzenia, do mediów społecznościowych.', 'To spot 3D promujący wydarzenie uwielbienia w mieście.'],
+       en: ['I could create a short animated spot with the date and venue of your event, for social media.', 'It is a 3D spot promoting a city worship event.'] },
+  7: { pl: ['Można ożywić wybrany obraz lub obiekt z wystawy: ruch, światło, głębia, do pokazania na stronie i w mediach.', 'To animacja obrazu dla muzeum.'],
+       en: ['I could bring a chosen painting or object from the exhibition to life with movement, light and depth, for your website and social media.', 'It is a painting animation made for a museum.'] },
+  9: { pl: ['Można przygotować animację logo, która otworzy Państwa materiały wideo.', 'To animacja logo i identyfikacji.'],
+       en: ['I could create a logo animation to open your videos.', 'It is a logo and identity animation.'] },
+  2: { pl: ['Można przygotować animowaną czołówkę serii.', 'To czołówka serii wideo 2D/3D.'],
+       en: ['I could create an animated title sequence for the series.', 'It is a 2D/3D title sequence for a video series.'] },
+  1: { pl: ['Można przygotować krótki animowany explainer.', 'To animowany explainer o tematyce biblijnej.'],
+       en: ['I could create a short animated explainer.', 'It is an animated explainer on a biblical theme.'] },
+  10: { pl: ['Można przygotować krótki explainer, który w minutę wyjaśni cel kampanii.', 'To explainer, który prosto tłumaczy złożony temat.'],
+        en: ['I could create a short explainer that explains the goal of your campaign in a minute.', 'It is an explainer that makes a complex topic simple.'] },
+};
+TEMPLATE_IDEAS[8] = TEMPLATE_IDEAS[7];
+function makeDraft(l) {
+  const en = l.lang === 'EN';
+  const title = cut(((l.signal || '').split(/:\s/)[0] || l.org || '').replace(/[„”"]/g, ''), 90) || cut(l.org, 90);
+  const proj = PORTFOLIO.find(p => p.id === l.projectId);
+  const t = proj && TEMPLATE_IDEAS[proj.id];
+  const idea = t ? t[en ? 'en' : 'pl'][0] : (en ? 'I could create a short promotional animation tailored to your event.' : 'Można przygotować krótką animację promocyjną dopasowaną do Państwa wydarzenia.');
+  const link = t ? (en
+    ? `I made a similar piece for "${proj.title}": ${proj.en}. ${t.en[1]}\n\n`
+    : `Podobną realizację zrobiłem przy projekcie „${proj.title}”: ${proj.pl}. ${t.pl[1]}\n\n`) : '';
+  return en
+    ? { subject: `An animation idea for ${title}`, body: `Hello,\n\nI'm writing about the news on your website: "${title}".\n\n${idea}\n\n${link}Would you be open to a short proposal?\n\n[Twój podpis]` }
+    : { subject: `Pomysł na animację: ${title}`, body: `Dzień dobry,\n\npiszę w związku z informacją na Państwa stronie: „${title}”.\n\n${idea}\n\n${link}Czy mogę przesłać krótką propozycję?\n\n[Twój podpis]` };
+}
+
 // Oceń leady bez oceny: pobiera stronę źródła (1 kredyt na lead).
 async function scoreExisting(key, leads, say) {
   const todo = leads.filter(l => l.status === 'nowy' && l.source).slice(0, FC_LIMIT.scrapes);
@@ -387,7 +422,7 @@ async function scoreExisting(key, leads, say) {
   for (const l of todo) {
     say(`Oceniam: ${l.org}`);
     try { const j = await fc(key, 'scrape', { url: l.source, formats: ['markdown'], onlyMainContent: false }); credits += j.creditsUsed || 1; const d = j.data || {}; const m = d.metadata || {};
-      patches[l.id] = scoreLead(l, { markdown: d.markdown || '', title: m.title || '', siteName: m.ogSiteName || '' }); }
+      const s = scoreLead(l, { markdown: d.markdown || '', title: m.title || '', siteName: m.ogSiteName || '' }); patches[l.id] = l.draft ? s : { ...s, draft: makeDraft({ ...l, ...s }) }; }
     catch (e) { credits += 1; if (e.status === 401 || e.status === 402) throw e; say(`Nie udało się odczytać: ${l.website}`); }
   }
   return { patches, credits, count: Object.keys(patches).length };
@@ -442,7 +477,8 @@ async function runSearch(key, settings, leads, say) {
       projectId: null, projectTitle: '', projectType: '', projectUrl: '', topic: '', draft: null,
       sentAt: null, followupAt: null, reply: null, notes: 'Znalezione zapytaniem: ' + c.q.q, rejectReason: '',
     };
-    return { ...lead, ...scoreLead(lead, { markdown: d.markdown || '', title: m.title || c.title || '', siteName: m.ogSiteName || '' }) };
+    const scored = { ...lead, ...scoreLead(lead, { markdown: d.markdown || '', title: m.title || c.title || '', siteName: m.ogSiteName || '' }) };
+    return { ...scored, draft: makeDraft(scored) };
   });
   return { leads: out, credits, searched: perQuery.length, scrapes, offset: (start + picked.length) % queries.length };
 }
@@ -796,12 +832,13 @@ function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLea
               </div>
             )}
             <div className="space-y-4 px-6">
+              {noDraft && <Button size="sm" variant="secondary" onClick={() => { const d = makeDraft(cur); setMsg(d); patchLead(cur.id, { draft: d }); }}>Wstaw szkic z szablonu</Button>}
               <div className="space-y-2"><Label>Temat</Label><Input value={msg.subject} onChange={e => setMsg({ ...msg, subject: e.target.value })} onBlur={persist} /></div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between"><Label>Treść</Label><span className={cn('font-mono text-xs tabular-nums', words > 130 ? 'text-accent' : 'text-fg3')}>{words} / 120 słów</span></div>
                 <Textarea rows="14" value={msg.body} onChange={e => setMsg({ ...msg, body: e.target.value })} onBlur={persist} />
               </div>
-              <p className="flex items-start gap-2 text-[0.9375rem] text-fg3"><Icon name="info" className="mt-0.5 h-4 w-4" />{noDraft ? 'Ten lead nie ma jeszcze szkicu. Napisz wiadomość sam: zapisze się, gdy klikniesz poza polem. Sprawdź fakty w źródle i wyślij ze swojej poczty' : 'Szkic napisało AI. Sprawdź fakty w źródle i wyślij sam, pojedynczo, ze swojej poczty'}</p>
+              <p className="flex items-start gap-2 text-[0.9375rem] text-fg3"><Icon name="info" className="mt-0.5 h-4 w-4" />{noDraft ? 'Ten lead nie ma jeszcze szkicu. Kliknij „Wstaw szkic z szablonu” albo napisz wiadomość sam. Sprawdź fakty w źródle i wyślij ze swojej poczty' : 'Szkic przygotowało AI lub szablon. Sprawdź fakty w źródle i wyślij sam, pojedynczo, ze swojej poczty'}</p>
             </div>
             <div className="mt-6 flex flex-wrap gap-2 border-t border-fg/[0.06] p-6">
               <Button variant="secondary" onClick={async () => toast(await copyText(msg.subject + '\n\n' + withSig(msg.body, data.settings.signature)) ? 'Skopiowano do schowka' : 'Nie udało się skopiować', 'Wklej do swojej poczty')}><Icon name="copy" />Kopiuj</Button>
@@ -1027,7 +1064,7 @@ function NotifySetting() {
 }
 
 /* ============ Okno: jak szukać nowych klientów ============ */
-function SearchInfo({ open, onClose, lastSearch, search, start, scoreNow, unscored, hasKey, goSettings }) {
+function SearchInfo({ open, onClose, lastSearch, search, start, scoreNow, draftsNow, undrafted, unscored, hasKey, goSettings }) {
   const r = search.result;
   return (
     <Dialog open={open} onClose={onClose}>
@@ -1045,14 +1082,15 @@ function SearchInfo({ open, onClose, lastSearch, search, start, scoreNow, unscor
       )}
       {r && (
         <div className="mt-4 space-y-1 text-sm">
-          {r.error ? <p className="text-accent">{r.error}</p> : r.scored !== undefined ? <p className="text-fg">Ocenione leady: {r.scored}</p> : <p className="text-fg">{r.leads.length ? `Nowi klienci: ${r.leads.length}` : 'Nic nowego'}</p>}
+          {r.error ? <p className="text-accent">{r.error}</p> : r.scored !== undefined ? <p className="text-fg">Ocenione leady: {r.scored}</p> : r.drafted !== undefined ? <p className="text-fg">Napisane szkice: {r.drafted}. Znajdziesz je w Wiadomościach</p> : <p className="text-fg">{r.leads.length ? `Nowi klienci: ${r.leads.length}` : 'Nic nowego'}</p>}
           {r.leads && r.leads.length > 0 && <p className="text-fg2">{r.leads.map(l => l.org).join(', ')}</p>}
           {r.credits > 0 && <p className="font-mono text-xs text-fg3">zużyte kredyty Firecrawl: ok. {r.credits}</p>}
         </div>
       )}
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
         {!hasKey ? <Button onClick={() => { onClose(); goSettings(); }}>Przejdź do Ustawień</Button>
           : <>
+            {undrafted > 0 && <Button variant="secondary" disabled={search.running} onClick={draftsNow}>Napisz szkice ({undrafted})</Button>}
             {unscored > 0 && <Button variant="secondary" disabled={search.running} onClick={scoreNow}>Oceń bez oceny ({Math.min(unscored, FC_LIMIT.scrapes)})</Button>}
             <Button disabled={search.running} onClick={start}><Icon name="search" />{search.running ? 'Pracuję…' : 'Sprawdź teraz'}</Button>
           </>}
@@ -1186,6 +1224,13 @@ function App() {
       say('Gotowe');
       setSearch({ running: false, log: [...log], result: { leads: [], credits: res.credits, scored: res.count } });
     } catch (e) { setSearch({ running: false, log: [...log], result: { error: fcError(e), leads: [], credits: 0 } }); }
+  };
+  const draftsNow = async () => {
+    const todo = data.leads.filter(l => ['oceniony', 'do_wyslania'].includes(l.status) && !l.draft);
+    if (!todo.length) return;
+    const drafts = {}; todo.forEach(l => { drafts[l.id] = makeDraft(l); });
+    await commit({ type: 'addDrafts', drafts });
+    setSearch({ running: false, log: [], result: { leads: [], credits: 0, drafted: todo.length } });
   };
   const ghDisconnect = () => { setToken(''); setGh(false); toast('Odłączono GitHuba', 'Token usunięty z tej przeglądarki'); };
 
@@ -1331,7 +1376,7 @@ function App() {
         </div>
       )}
       <LeadSheet lead={lead} patchLead={patchLead} close={() => setOpenId(null)} goMessage={id => { setOpenId(null); setPage('wiadomosci'); setMsgTab('szkice'); setMsgSel(id); }} />
-      <SearchInfo open={searchOpen} onClose={() => setSearchOpen(false)} lastSearch={data.lastSearch} search={search} start={startSearch} scoreNow={scoreNow} unscored={data.leads.filter(l => l.status === 'nowy').length} hasKey={!!fcKey} goSettings={() => go('ustawienia')} />
+      <SearchInfo open={searchOpen} onClose={() => setSearchOpen(false)} lastSearch={data.lastSearch} search={search} start={startSearch} scoreNow={scoreNow} draftsNow={draftsNow} undrafted={data.leads.filter(l => ['oceniony', 'do_wyslania'].includes(l.status) && !l.draft).length} unscored={data.leads.filter(l => l.status === 'nowy').length} hasKey={!!fcKey} goSettings={() => go('ustawienia')} />
       <Toaster />
     </div>
   );
