@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klienci</title>
+<meta name="theme-color" content="#141415">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="ikony/ikona-192.png">
+<link rel="apple-touch-icon" href="ikony/ikona-192.png">
+<!--
+  Aplikacja „Klienci”. Dane: plik dane/leady.js (zapisuje go Claude Code komendą /sesja, a aplikacja zapisuje w nim Twoje zmiany).
+  Komponenty o budowie shadcn/ui, przemalowane przez zmienne motywu.
+  Widok według skilla unslop: Damir Sokolovsky (@heydamir), https://github.com/heydamir/unslop, licencja CC BY 4.0.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.5"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: 'rgb(var(--bg) / <alpha-value>)', side: 'rgb(var(--side) / <alpha-value>)', card: 'rgb(var(--card) / <alpha-value>)',
+          raised: 'rgb(var(--raised) / <alpha-value>)', fg: 'rgb(var(--fg) / <alpha-value>)', fg2: 'rgb(var(--fg2) / <alpha-value>)',
+          fg3: 'rgb(var(--fg3) / <alpha-value>)', accent: 'rgb(var(--accent) / <alpha-value>)', pos: 'rgb(var(--pos) / <alpha-value>)', neg: 'rgb(var(--neg) / <alpha-value>)',
+        },
+        fontFamily: { sans: ['Geist', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif'], mono: ['"Geist Mono"', 'ui-monospace', 'Consolas', 'monospace'] },
+        borderRadius: { sm: '4px', md: '6px', lg: '8px', xl: '12px', '2xl': '16px' },
+      },
+    },
+  };
+</script>
+<style>
+  :root {
+    --side: 15 15 16; --bg: 20 20 21; --card: 25 25 27; --raised: 35 35 37;
+    --fg: 237 237 237; --fg2: 161 161 166; --fg3: 133 133 139;
+    --accent: 242 107 58; --pos: 76 195 138; --neg: 229 72 77;
+    color-scheme: dark;
+  }
+  html, body { background: rgb(var(--bg)); color: rgb(var(--fg)); }
+  body { font-family: Geist, ui-sans-serif, system-ui, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  ::selection { background: rgb(var(--accent) / .35); }
+  input[type=range] { accent-color: rgb(var(--accent)); }
+  @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+  @keyframes slide { from { transform: translateX(24px); opacity: 0 } to { transform: none; opacity: 1 } }
+  @keyframes pop { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) } to { opacity: 1; transform: translate(-50%, -50%) } }
+  .a-fade { animation: fade 200ms cubic-bezier(0.22, 1, 0.36, 1) both }
+  .a-rise { animation: rise 360ms cubic-bezier(0.22, 1, 0.36, 1) both }
+  .a-slide { animation: slide 320ms cubic-bezier(0.22, 1, 0.36, 1) both }
+  .a-pop { animation: pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both }
+  .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px }
+  .scroll-thin::-webkit-scrollbar-thumb { background: rgb(var(--fg) / .1); border-radius: 8px }
+</style>
+</head>
+<body>
+<div id="root"><p style="padding:24px;font-family:sans-serif;color:#a1a1a6">Ładowanie aplikacji (potrzebny jest internet, żeby wczytać biblioteki)</p></div>
+
+<script src="dane/leady.js" charset="utf-8"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+const cn = (...a) => a.filter(Boolean).join(' ');
+
+/* ============ Ikony (lucide, 16px, kreska 1.5) ============ */
+const ICONS = {
+  dashboard: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  settings: '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  external: '<path d="M7 17 17 7"/><path d="M7 7h10v10"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+  arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  reply: '<path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+};
+function Icon({ name, className = 'h-4 w-4' }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={cn('shrink-0', className)} dangerouslySetInnerHTML={{ __html: ICONS[name] }} />;
+}
+
+/* ============ Komponenty (budowa shadcn/ui, motyw z tokenów) ============ */
+const BTN = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/30 disabled:pointer-events-none disabled:opacity-40';
+const BTN_V = {
+  default: 'bg-fg text-bg hover:bg-fg/90', accent: 'bg-accent text-bg hover:bg-accent/90',
+  secondary: 'bg-raised text-fg border border-fg/[0.08] hover:bg-fg/[0.09]', ghost: 'text-fg2 hover:bg-raised hover:text-fg',
+  danger: 'text-neg hover:bg-neg/10', link: 'text-fg2 underline-offset-4 hover:text-fg hover:underline',
+};
+const BTN_S = { default: 'h-9 px-4', sm: 'h-8 px-3 text-[13px]' };
+const Button = ({ variant = 'default', size = 'default', className, ...p }) => <button className={cn(BTN, BTN_V[variant], BTN_S[size], className)} {...p} />;
+const Card = ({ className, ...p }) => <div className={cn('rounded-2xl border border-fg/[0.06] bg-card', className)} {...p} />;
+const Input = ({ className, ...p }) => <input className={cn('h-9 w-full rounded-lg border border-fg/[0.08] bg-raised px-3 text-sm text-fg placeholder:text-fg3 transition-colors focus:outline-none focus:border-fg/25', className)} {...p} />;
+const Textarea = ({ className, ...p }) => <textarea className={cn('w-full rounded-lg border border-fg/[0.08] bg-raised px-3 py-2 text-sm leading-6 text-fg placeholder:text-fg3 transition-colors focus:outline-none focus:border-fg/25', className)} {...p} />;
+const Select = ({ className, children, ...p }) => <select className={cn('h-9 rounded-lg border border-fg/[0.08] bg-raised px-3 text-sm text-fg focus:outline-none focus:border-fg/25', className)} {...p}>{children}</select>;
+const Label = ({ className, ...p }) => <label className={cn('block text-[13px] text-fg2', className)} {...p} />;
+const Hair = ({ className }) => <div className={cn('h-px w-full bg-fg/[0.06]', className)} />;
+const Kbd = ({ children }) => <code className="rounded-md border border-fg/[0.1] bg-side px-1.5 py-0.5 font-mono text-[12px] text-fg">{children}</code>;
+function Switch({ checked, onChange }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+      className={cn('relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150', checked ? 'bg-accent' : 'bg-fg/15')}>
+      <span className={cn('block h-4 w-4 rounded-full bg-fg transition-transform duration-150 ease-out', checked ? 'translate-x-[18px]' : 'translate-x-0.5')} />
+    </button>
+  );
+}
+function Tabs({ value, onChange, items }) {
+  return (
+    <div className="scroll-thin inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-fg/[0.06] bg-side p-1">
+      {items.map(it => (
+        <button key={it.value} onClick={() => onChange(it.value)}
+          className={cn('inline-flex h-7 items-center gap-2 whitespace-nowrap rounded-md px-3 text-[13px] transition-colors duration-150',
+            value === it.value ? 'bg-raised text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-fg3 hover:text-fg')}>
+          {it.label}{it.count != null && <span className="font-mono text-xs text-fg3">{it.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+function Sheet({ open, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="a-fade fixed inset-0 bg-black/60" onClick={onClose} />
+      <div className="a-slide scroll-thin fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col overflow-y-auto border-l border-fg/[0.08] bg-card sm:max-w-[560px]">
+        <button onClick={onClose} className="absolute right-4 top-4 rounded-md p-1 text-fg3 transition-colors hover:bg-raised hover:text-fg" aria-label="Zamknij"><Icon name="x" /></button>
+        {children}
+      </div>
+    </div>
+  );
+}
+function Dialog({ open, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="a-fade fixed inset-0 bg-black/60" onClick={onClose} />
+      <div className="a-pop fixed left-1/2 top-1/2 z-50 w-[calc(100%-32px)] max-w-[480px] rounded-2xl border border-fg/[0.08] bg-card p-6 shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+        <button onClick={onClose} className="absolute right-4 top-4 rounded-md p-1 text-fg3 transition-colors hover:bg-raised hover:text-fg" aria-label="Zamknij"><Icon name="x" /></button>
+        {children}
+      </div>
+    </div>
+  );
+}
+function toast(title, description) { window.dispatchEvent(new CustomEvent('app-toast', { detail: { title, description, id: Math.random() } })); }
+function Toaster() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    const h = e => { const t = e.detail; setItems(x => [...x, t]); setTimeout(() => setItems(x => x.filter(i => i.id !== t.id)), 3600); };
+    window.addEventListener('app-toast', h);
+    return () => window.removeEventListener('app-toast', h);
+  }, []);
+  return (
+    <div className="fixed bottom-4 right-4 z-[60] flex w-[calc(100%-32px)] max-w-[360px] flex-col gap-2">
+      {items.map(t => (
+        <div key={t.id} className="a-rise rounded-xl border border-fg/[0.08] bg-raised px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+          <div className="text-sm text-fg">{t.title}</div>
+          {t.description && <div className="mt-0.5 text-[13px] text-fg2">{t.description}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ============ Daty, liczby, timecode ============ */
+const TODAY = new Date(); TODAY.setHours(0, 0, 0, 0);
+const iso = d => { const z = new Date(d); return z.getFullYear() + '-' + String(z.getMonth() + 1).padStart(2, '0') + '-' + String(z.getDate()).padStart(2, '0'); };
+const since = s => s ? Math.round((TODAY - new Date(s.slice(0, 10) + 'T00:00:00')) / 86400000) : null;
+const plural = (n, one, few, many) => n === 1 ? one : ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many);
+const fmt = s => s ? new Date(s.slice(0, 10) + 'T00:00:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) : '–';
+const fmtTime = s => { if (!s) return '–'; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+const MONTHS = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+const tc = sec => [Math.floor(sec / 3600), Math.floor(sec / 60) % 60, sec % 60].map(n => String(n).padStart(2, '0')).join(':');
+
+/* ============ Portfolio (pawelmotion.com, stan 2026-11-24), numery jak w portfolio.md ============ */
+const PORTFOLIO = [
+  { id: 1, title: 'Bible Unbound – Gospel', type: 'Explainer 2D, 5 min', pl: 'https://pawelmotion.com/pl/realizacje/gospel/', en: 'https://pawelmotion.com/en/work/gospel/', tags: ['explainer', 'biblijny', '2D'] },
+  { id: 2, title: 'Bible Unbound – Intro', type: 'Czołówka 2D/3D', pl: 'https://pawelmotion.com/pl/realizacje/bible-unbound-intro/', en: 'https://pawelmotion.com/en/work/bible-unbound-intro/', tags: ['intro', 'seria wideo'] },
+  { id: 3, title: 'Bible Unbound – Tomasz Apostoł', type: 'Kolaż 2.5D', pl: 'https://pawelmotion.com/pl/realizacje/tomasz-apostol/', en: 'https://pawelmotion.com/en/work/thomas-apostol/', tags: ['biblijny', 'storytelling'] },
+  { id: 4, title: 'Uwielbienie w Centrum Miasta 2022', type: 'Spot 3D', pl: 'https://pawelmotion.com/pl/realizacje/uwielbienie-w-centrum-miasta-2022/', en: 'https://pawelmotion.com/en/work/worship-in-the-city-center-2022/', tags: ['3D', 'uwielbienie', 'wydarzenie'] },
+  { id: 5, title: 'Panama w Kielcach – ŚDM 2019', type: 'Spot wydarzenia', pl: 'https://pawelmotion.com/pl/realizacje/panama-w-kielcach/', en: 'https://pawelmotion.com/en/work/panama-in-kielce/', tags: ['młodzież', 'ŚDM', 'spot'] },
+  { id: 6, title: 'Kościół Ducha Świętego', type: 'Film jubileuszowy 3D', pl: 'https://pawelmotion.com/pl/realizacje/kosciol-ducha-swietego/', en: 'https://pawelmotion.com/en/work/church-of-the-holy-spirit/', tags: ['jubileusz', '3D'] },
+  { id: 7, title: 'Muzeum Narodowe – Widok Chęcin', type: 'Animacja obrazu 2.5D', pl: 'https://pawelmotion.com/pl/realizacje/widok-checin/', en: 'https://pawelmotion.com/en/work/view-of-checiny/', tags: ['sztuka', 'muzeum'] },
+  { id: 8, title: 'Muzeum Narodowe – Nikifor', type: 'Animacja i montaż', pl: 'https://pawelmotion.com/pl/realizacje/nikifor/', en: 'https://pawelmotion.com/en/work/nikifor/', tags: ['sztuka', 'muzeum'] },
+  { id: 9, title: 'Trileas', type: 'Animacja logo', pl: 'https://pawelmotion.com/pl/realizacje/trileas-animacja-logo/', en: 'https://pawelmotion.com/en/work/trileas-animation-logo/', tags: ['logo'] },
+  { id: 10, title: '4 ECO', type: 'Explainer 2D', pl: 'https://pawelmotion.com/pl/realizacje/4-eco/', en: 'https://pawelmotion.com/en/work/4-eco/', tags: ['explainer'] },
+  { id: 11, title: 'YAGOOSH – Puppeteer', type: 'Teledysk 2.5D', pl: 'https://pawelmotion.com/pl/realizacje/puppeteer/', en: 'https://pawelmotion.com/en/work/puppeteer/', tags: ['teledysk'] },
+  { id: 17, title: 'Redemptio', type: 'Animacja autorska', pl: 'https://pawelmotion.com/pl/realizacje/redemptio/', en: 'https://pawelmotion.com/en/work/redemptio/', tags: ['duchowość'] },
+];
+function leadProject(l) {
+  if (l.projectTitle) return { title: l.projectTitle, type: l.projectType || '', url: l.projectUrl };
+  const p = PORTFOLIO.find(x => x.id === l.projectId);
+  return p ? { title: p.title, type: p.type, url: l.lang === 'EN' ? p.en : p.pl } : null;
+}
+
+/* ============ Słowniki ============ */
+const SEG = { 'PL-WYD': 'Wydarzenia PL', 'PL-WSP': 'Wspólnoty PL', 'INST': 'Firmy i instytucje', 'ZAG': 'Zagranica' };
+const STATUS = {
+  nowy: { label: 'Nowy', dot: 'bg-fg2' }, oceniony: { label: 'Oceniony', dot: 'bg-fg2' },
+  do_wyslania: { label: 'Do wysłania', dot: 'bg-accent' }, wyslany: { label: 'Wysłany', dot: 'border border-fg3 bg-transparent' },
+  odpowiedz: { label: 'Odpowiedź', dot: 'bg-pos' }, rozmowa: { label: 'Rozmowa', dot: 'bg-pos' },
+  zlecenie: { label: 'Zlecenie', dot: 'bg-pos', text: 'text-pos' }, brak_odpowiedzi: { label: 'Brak odpowiedzi', dot: 'bg-fg3/50' },
+  odrzucony: { label: 'Odrzucony', dot: 'bg-neg/70' },
+};
+const REJECT = ['Za późno: wydarzenie za mniej niż 4 tygodnie', 'Za mały budżet: tylko lokalny zasięg', 'Mają już stałego animatora lub studio', 'Brak ogólnego kontaktu do organizacji', 'Nie pasuje do mojej niszy'];
+const Status = ({ s }) => { const m = STATUS[s] || STATUS.nowy; return (
+  <span className={cn('inline-flex items-center gap-2 whitespace-nowrap text-[13px]', m.text || 'text-fg2')}><span className={cn('h-1.5 w-1.5 rounded-full', m.dot)} />{m.label}</span>); };
+const Score = ({ score }) => score
+  ? <span className="font-mono text-[13px] tabular-nums"><span className={score === 3 ? 'text-fg' : score === 2 ? 'text-fg2' : 'text-fg3'}>{score}</span><span className="text-fg3">/3</span></span>
+  : <span className="font-mono text-[13px] text-fg3">–</span>;
+function makeFollowup(l) {
+  const subj = 'Re: ' + (l.draft ? l.draft.subject : l.org), topic = l.topic || (l.lang === 'EN' ? 'animation' : 'animacji');
+  if (l.lang === 'EN') return { subject: subj, body: `Hello,\n\nI'm following up on my message from ${fmt(l.sentAt)} about ${topic}. If it's still relevant, I'd be glad to send a short proposal. If not, thank you for reading.\n\n[Your signature]` };
+  return { subject: subj, body: `Dzień dobry,\n\nwracam do mojej wiadomości z ${fmt(l.sentAt)} w sprawie ${topic}. Jeśli temat jest aktualny, chętnie prześlę krótką propozycję. Jeśli nie, dziękuję za przeczytanie.\n\n[Twój podpis]` };
+}
+
+/* ============ Plik danych: odczyt, zapis, kolejka zmian ============ */
+const EMPTY = { version: 1, updated: null, lastSearch: null, leads: [], sessions: [], settings: { beforeMinutes: '', perDay: 5, mix: { 'PL-WYD': 35, 'PL-WSP': 20, 'INST': 25, 'ZAG': 20 }, signals: [], direction: [], gmail: '', signature: '' } };
+const normalize = d => ({ ...EMPTY, ...d, settings: { ...EMPTY.settings, ...(d && d.settings) }, leads: (d && d.leads) || [], sessions: (d && d.sessions) || [] });
+const parseFile = text => { const s = text.indexOf('{'), e = text.lastIndexOf('}'); return normalize(JSON.parse(text.slice(s, e + 1))); };
+const serialize = d => 'window.DANE = ' + JSON.stringify(d, null, 2) + ';\n';
+const fsSupported = 'showDirectoryPicker' in window;
+
+// Zmiany jako operacje: dzięki temu nie nadpisujemy leadów, które automat dopisał w międzyczasie.
+function applyOp(d, op) {
+  if (op.type === 'lead') return { ...d, leads: d.leads.map(l => l.id === op.id ? { ...l, ...op.patch } : l) };
+  if (op.type === 'session') return { ...d, sessions: [...d.sessions, op.entry] };
+  if (op.type === 'settings') return { ...d, settings: { ...d.settings, ...op.patch } };
+  if (op.type === 'patchLeads') return { ...d, leads: d.leads.map(l => op.patches[l.id] && l.status === 'nowy' ? { ...l, ...op.patches[l.id] } : l) };
+  if (op.type === 'addLeads') {
+    const doms = new Set(d.leads.map(l => l.website)), ids = new Set(d.leads.map(l => l.id));
+    const add = op.leads.filter(l => !ids.has(l.id) && !doms.has(l.website));
+    return { ...d, leads: [...d.leads, ...add], lastSearch: op.at, settings: { ...d.settings, queryOffset: op.offset } };
+  }
+  return d;
+}
+const PENDING = 'klienci-oczekujace-zmiany';
+const getPending = () => { try { return JSON.parse(localStorage.getItem(PENDING)) || []; } catch (e) { return []; } };
+const setPending = a => { try { localStorage.setItem(PENDING, JSON.stringify(a)); } catch (e) {} };
+
+// Uchwyt do folderu „dane” trzymamy w IndexedDB, żeby po ponownym otwarciu nie wybierać go od nowa.
+function idb(mode, fn) {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('klienci', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => { const tx = r.result.transaction('kv', mode); const q = fn(tx.objectStore('kv')); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); };
+    r.onerror = () => rej(r.error);
+  });
+}
+const saveHandle = h => idb('readwrite', s => s.put(h, 'dane'));
+const loadHandle = () => idb('readonly', s => s.get('dane')).catch(() => null);
+async function readViaHandle(h) { const fh = await h.getFileHandle('leady.js'); return parseFile(await (await fh.getFile()).text()); }
+async function writeViaHandle(h, d) { const fh = await h.getFileHandle('leady.js'); const w = await fh.createWritable(); await w.write(serialize(d)); await w.close(); }
+function readViaScript() {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'dane/leady.js?t=' + Date.now(); s.charset = 'utf-8';
+    s.onload = () => { s.remove(); res(normalize(window.DANE)); };
+    s.onerror = () => { s.remove(); rej(new Error('brak pliku')); };
+    document.body.appendChild(s);
+  });
+}
+
+// GitHub: plik danych w prywatnym repozytorium. Token trzymamy tylko w tej przeglądarce, nigdy w pliku.
+const GH = { repo: 'pawelsamuelstudio/klienci-chrzescijanscy', path: 'prototyp/dane/leady.js', branch: 'main' };
+const GH_KEY = 'klienci-github-token';
+const getStore = k => { try { return localStorage.getItem(k) || sessionStorage.getItem(k) || ''; } catch (e) { return ''; } };
+const setStore = (k, v, remember) => { try { localStorage.removeItem(k); sessionStorage.removeItem(k); if (v) (remember ? localStorage : sessionStorage).setItem(k, v); } catch (e) {} };
+const getToken = () => getStore(GH_KEY);
+const setToken = (tok, remember) => setStore(GH_KEY, tok, remember);
+const b64decode = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
+const b64encode = s => { const b = new TextEncoder().encode(s); let r = ''; for (let i = 0; i < b.length; i += 0x8000) r += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(r); };
+async function ghFetch(tok, method, body) {
+  const url = `https://api.github.com/repos/${GH.repo}/contents/${GH.path}` + (method === 'GET' ? `?ref=${GH.branch}&t=${Date.now()}` : '');
+  const r = await fetch(url, { method, cache: 'no-store', headers: { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) { const e = new Error('github ' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+async function ghRead(tok) { const j = await ghFetch(tok, 'GET'); return { data: parseFile(b64decode(j.content)), sha: j.sha }; }
+async function ghWrite(tok, d, sha, msg) { return ghFetch(tok, 'PUT', { message: msg, content: b64encode(serialize(d)), sha, branch: GH.branch }); }
+const ghError = e => e && e.status === 401 ? 'Token jest nieprawidłowy albo wygasł' : e && (e.status === 403 || e.status === 404) ? 'Token nie ma dostępu do repozytorium klienci-chrzescijanscy' : 'Brak połączenia z GitHubem';
+
+// Poczta: wyciągamy sam adres z pola kontaktu i otwieramy nową wiadomość w Gmailu na wskazanym koncie.
+const emailOf = s => ((s || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i) || [''])[0];
+const withSig = (body, sig) => sig && sig.trim() ? body.split('[Twój podpis]').join(sig.trim()) : body;
+function openMail(settings, to, subject, body) {
+  const from = (settings.gmail || '').trim();
+  if (from) window.open('https://mail.google.com/mail/?authuser=' + encodeURIComponent(from) + '&view=cm&fs=1&to=' + encodeURIComponent(to) + '&su=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), '_blank', 'noopener');
+  else window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+}
+
+// Firecrawl: aplikacja szuka sama. Klucz trzymamy tylko w tej przeglądarce.
+const FC_KEY = 'klienci-firecrawl-key';
+const FC_LIMIT = { searches: 6, scrapes: 10 };
+async function fc(key, path, body) {
+  const r = await fetch('https://api.firecrawl.dev/v2/' + path, { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = new Error('firecrawl ' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+const fcError = e => e && e.status === 401 ? 'Klucz Firecrawl jest nieprawidłowy' : e && e.status === 402 ? 'Brak kredytów Firecrawl w tym miesiącu' : e && e.status === 429 ? 'Za dużo zapytań naraz, spróbuj za chwilę' : 'Brak połączenia z Firecrawl';
+const domainOf = u => { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { return ''; } };
+// Serwisy, z których nie da się potwierdzić organizacji ani kontaktu (posty, przekierowania, sprzedaż biletów).
+const SKIP_HOSTS = /(^|\.)(google\.[a-z.]+|facebook\.com|instagram\.com|youtube\.com|youtu\.be|tiktok\.com|x\.com|twitter\.com|linkedin\.com|eventbrite\.[a-z.]+|wikipedia\.org)$/i;
+// Tylko ogólne adresy organizacji, nigdy prywatne adresy osób.
+const GENERAL_MAIL = /^(info|kontakt|contact|contacts|biuro|office|sekretariat|secretariat|hello|media|press|prasa|redakcja|kuria|parafia|recepcja|zapisy|rejestracja|registration|events?|team|poczta|administracja|fundacja|festiwal|festival|church|ministry|mission|misje|szkola|school|muzeum|museum|wydawnictwo|marketing|promocja)@/i;
+const generalEmail = text => ((text || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).map(x => x.toLowerCase()).find(x => GENERAL_MAIL.test(x)) || '';
+const contactLinkOf = (links, dom) => (links || []).find(l => domainOf(l) === dom && !l.includes('#') && /kontakt|contact/i.test(l)) || '';
+
+// Ocena według reguł z kryteria.md: 4 warunki (sygnał, budżet, pasujący projekt, ogólny kontakt). 3 = wszystkie, 2 = dwa lub trzy, 1 = mniej.
+const MONTHS_RE = { stycznia: 1, lutego: 2, marca: 3, kwietnia: 4, maja: 5, czerwca: 6, lipca: 7, sierpnia: 8, września: 9, wrzesnia: 9, października: 10, pazdziernika: 10, listopada: 11, grudnia: 12,
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+function futureDates(text) {
+  const out = [], now = new Date(); now.setHours(0, 0, 0, 0);
+  const push = (y, m, d) => { const x = new Date(+y, +m - 1, +d); if (!isNaN(x) && x.getMonth() === +m - 1) { const days = Math.round((x - now) / 86400000); if (days >= 0 && days <= 400) out.push({ x, days }); } };
+  const s = (text || '').toLowerCase();
+  for (const m of s.matchAll(/\b(\d{1,2})[./](\d{1,2})[./](20\d{2})\b/g)) push(m[3], m[2], m[1]);
+  for (const m of s.matchAll(/\b(20\d{2})-(\d{2})-(\d{2})\b/g)) push(m[1], m[2], m[3]);
+  const names = Object.keys(MONTHS_RE).join('|');
+  for (const m of s.matchAll(new RegExp('\\b(\\d{1,2})(?:\\s*[-–]\\s*\\d{1,2})?\\.?\\s+(' + names + ')\\s+(20\\d{2})', 'g'))) push(m[3], MONTHS_RE[m[2]], m[1]);
+  for (const m of s.matchAll(new RegExp('\\b(' + names + ')\\s+(\\d{1,2})(?:\\s*[-–]\\s*\\d{1,2})?,?\\s+(20\\d{2})', 'g'))) push(m[3], MONTHS_RE[m[1]], m[2]);
+  return out;
+}
+const SIGNAL_RE = /jubileusz|rocznic|lecie\b|zapisy|zapisz się|rejestracj|registration|register|festiwal|festival|koncert|concert|konferencj|conference|rekolekcj|retreat|wystaw|exhibition|premier|launch|nowa seria|new series|kampani|campaign|zbiórk|dni otwarte|open day|rekrutacj|rebranding|nowe logo|ŚDM|światowe dni młodzieży|world youth day|pielgrzymk/i;
+const BUDGET_RE = /bilet|tickets?\b|sponsor|partnerzy|partners\b|patronat|patron medialny|arena|stadion|stadium|amfiteatr|hala |konferencj|conference|ogólnopolsk|międzynarodow|international|national|telewizj|transmisj|livestream/i;
+const PROJECT_RULES = [
+  [/jubileusz|rocznic|lecie\b|anniversary|jubilee/i, 6], [/ŚDM|światowe dni młodzieży|world youth day|młodzież|youth/i, 5],
+  [/muzeum|museum|wystaw|exhibition|obraz|ikon|sztuk/i, 7], [/uwielbien|worship|koncert|concert|festiwal|festival/i, 4],
+  [/nowe logo|rebranding|nowa marka|new brand|logo/i, 9], [/seria wideo|video series|podcast|kanał|youtube|czołówk/i, 2],
+  [/biblij|bible|ewangeli|gospel|katechez/i, 1], [/zbiórk|kampani|campaign|fundacj|charity|explainer/i, 10], [/płyt|album|teledysk|music video/i, 11],
+];
+const OWN_ORG = /diecezj|archidiecezj|kuria|parafi|zakon|zgromadzeni|sanktuari|klasztor|wspólnot|fundacj|muzeum|museum|church\b|ministr/i;
+const PORTAL_RE = /portal|news|gazeta|tygodnik|magazyn|magazine|serwis|wiadomości|wiadomosci|telewizj|radio|\btv\b/i;
+// Całe słowo zamiast urwanego rdzenia, np. „pielgrzymka” zamiast „pielgrzymk”.
+const wordAt = (text, re) => { const m = re.exec(text || ''); if (!m) return ''; const rest = text.slice(m.index + m[0].length).match(/^[a-ząćęłńóśźżA-ZĄĆĘŁŃÓŚŹŻ]*/)[0]; return (m[0] + rest).trim(); };
+function scoreLead(lead, page) {
+  // Najpierw tytuł i opis (tam jest sygnał), dopiero potem cała strona (tam bywa menu i stopka).
+  const head = [lead.signal, page.title].join(' \n ');
+  const text = [head, page.markdown].join(' \n ');
+  const name = lead.org + ' ' + (page.siteName || '');
+  const portal = (PORTAL_RE.test(name) || /\/(news|aktualnosci|wiadomosci|artykul)/i.test(lead.source)) && !OWN_ORG.test(name);
+  const dates = futureDates(page.markdown + ' ' + lead.signal);
+  const far = dates.filter(d => d.days >= 28).sort((a, b) => b.days - a.days)[0];
+  const near = dates.length > 0 && !far;
+  const sig = wordAt(head, SIGNAL_RE) || wordAt(text, SIGNAL_RE);
+  const signalOk = !!sig && !near;
+  const budget = wordAt(text, BUDGET_RE);
+  const rule = PROJECT_RULES.find(([re]) => re.test(head)) || PROJECT_RULES.find(([re]) => re.test(text));
+  const proj = rule && PORTFOLIO.find(p => p.id === rule[1]);
+  const contactOk = /@/.test(lead.contact) || /^https?:/.test(lead.contact);
+  const met = [signalOk, !!budget, !!proj, contactOk].filter(Boolean).length;
+  let score = met === 4 ? 3 : met >= 2 ? 2 : 1;
+  const why = [];
+  why.push(sig ? (near ? `słowo „${sig}”, ale termin może być za blisko` : `słowo „${sig}”`) : 'brak wyraźnego sygnału');
+  if (far) why.push(`data na stronie ${far.x.toLocaleDateString('pl-PL')} (za ${Math.round(far.days / 7)} tyg.)`);
+  why.push(budget ? `oznaka budżetu: „${budget.trim()}”` : 'brak oznak budżetu');
+  why.push(/@/.test(lead.contact) ? 'ogólny e-mail' : contactOk ? 'formularz lub strona kontaktu' : 'brak ogólnego kontaktu');
+  const notes = [];
+  if (portal) { score = 1; notes.push('Sprawdź organizatora: źródło to artykuł lub portal, nie strona organizacji.'); }
+  if (near) notes.push('Termin może być za blisko (mniej niż 4 tygodnie), sprawdź w źródle.');
+  return {
+    score, status: 'oceniony', reason: 'Ocena automatyczna: ' + why.join(', ') + '.',
+    projectId: proj ? proj.id : null, projectTitle: proj ? proj.title : '', projectType: proj ? proj.type : '',
+    projectUrl: proj ? (lead.lang === 'EN' ? proj.en : proj.pl) : '',
+    notes: [lead.notes, ...notes].filter(Boolean).join(' '),
+  };
+}
+
+// Oceń leady bez oceny: pobiera stronę źródła (1 kredyt na lead).
+async function scoreExisting(key, leads, say) {
+  const todo = leads.filter(l => l.status === 'nowy' && l.source).slice(0, FC_LIMIT.scrapes);
+  const patches = {}; let credits = 0;
+  for (const l of todo) {
+    say(`Oceniam: ${l.org}`);
+    try { const j = await fc(key, 'scrape', { url: l.source, formats: ['markdown'], onlyMainContent: false }); credits += j.creditsUsed || 1; const d = j.data || {}; const m = d.metadata || {};
+      patches[l.id] = scoreLead(l, { markdown: d.markdown || '', title: m.title || '', siteName: m.ogSiteName || '' }); }
+    catch (e) { credits += 1; if (e.status === 401 || e.status === 402) throw e; say(`Nie udało się odczytać: ${l.website}`); }
+  }
+  return { patches, credits, count: Object.keys(patches).length };
+}
+const cut = (s, n) => { s = (s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+
+async function runSearch(key, settings, leads, say) {
+  const queries = (settings.queries || []).filter(q => q.on && q.q);
+  if (!queries.length) throw Object.assign(new Error('brak zapytań'), { msg: 'Brak włączonych zapytań w Ustawieniach' });
+  const start = (settings.queryOffset || 0) % queries.length;
+  const picked = Array.from({ length: Math.min(FC_LIMIT.searches, queries.length) }, (_, i) => queries[(start + i) % queries.length]);
+  const known = new Set(leads.map(l => l.website).filter(Boolean));
+  let credits = 0, found = 0; const perQuery = [];
+  for (let i = 0; i < picked.length; i++) {
+    const q = picked[i]; say(`Szukam (${i + 1}/${picked.length}): ${q.q}`);
+    const j = await fc(key, 'search', { query: q.q, limit: 8, country: q.country || 'PL', tbs: 'qdr:m3' });
+    credits += j.creditsUsed || 2;
+    const web = Array.isArray(j.data) ? j.data : ((j.data && j.data.web) || []);
+    found += web.length;
+    const list = [];
+    for (const w of web) { const dom = domainOf(w.url); if (!dom || SKIP_HOSTS.test(dom) || known.has(dom)) continue; known.add(dom); list.push({ q, url: w.url, title: w.title, description: w.description, dom }); }
+    perQuery.push(list);
+    if (i === 1 && found === 0) { say('Firecrawl nie zwraca wyników. To najpewniej chwilowa awaria po jego stronie, przerywam'); break; }
+  }
+  // Kandydaci na zmianę z każdego zapytania, żeby nie brać wszystkich z jednego.
+  const cands = []; for (let r = 0; r < 8; r++) perQuery.forEach(l => l[r] && cands.push(l[r]));
+  const max = Math.min(settings.perDay || 5, FC_LIMIT.scrapes);
+  let scrapes = 0; const pages = [];
+  for (const c of cands.slice(0, Math.min(max, 7))) {
+    say(`Czytam stronę (${scrapes + 1}): ${c.dom}`);
+    try { const j = await fc(key, 'scrape', { url: c.url, formats: ['markdown', 'links'], onlyMainContent: false }); scrapes++; credits += j.creditsUsed || 1; pages.push({ c, d: j.data || {} }); }
+    catch (e) { scrapes++; credits += 1; if (e.status === 401 || e.status === 402) throw e; say(`Nie udało się odczytać: ${c.dom}`); }
+  }
+  // Brak adresu na stronie: zaglądamy na stronę kontaktu, dopóki starcza limitu.
+  for (const p of pages) {
+    p.mail = generalEmail(p.d.markdown); p.link = contactLinkOf(p.d.links, p.c.dom);
+    if (!p.mail && p.link && scrapes < FC_LIMIT.scrapes) {
+      say(`Szukam kontaktu: ${p.c.dom}`);
+      try { const j = await fc(key, 'scrape', { url: p.link, formats: ['markdown'], onlyMainContent: false }); credits += j.creditsUsed || 1; p.mail = generalEmail((j.data || {}).markdown); } catch (e) { credits += 1; }
+      scrapes++;
+    }
+  }
+  const day = iso(new Date()).replace(/-/g, '');
+  let n = leads.filter(l => (l.id || '').startsWith('L' + day)).length;
+  const out = pages.map(({ c, d, mail, link }) => {
+    const m = d.metadata || {};
+    const lead = {
+      id: `L${day}-${String(++n).padStart(2, '0')}`, org: cut(m.ogSiteName || m['og:site_name'] || m.title || c.title || c.dom, 90),
+      segment: c.q.segment || 'PL-WYD', country: c.q.country || 'PL', lang: (c.q.country || 'PL') === 'PL' ? 'PL' : 'EN',
+      signal: cut([c.title, c.description].filter(Boolean).join(': '), 220), source: c.url, website: c.dom,
+      contact: mail || link || '[do sprawdzenia]', added: iso(new Date()), status: 'nowy', score: null, reason: '',
+      projectId: null, projectTitle: '', projectType: '', projectUrl: '', topic: '', draft: null,
+      sentAt: null, followupAt: null, reply: null, notes: 'Znalezione zapytaniem: ' + c.q.q, rejectReason: '',
+    };
+    return { ...lead, ...scoreLead(lead, { markdown: d.markdown || '', title: m.title || c.title || '', siteName: m.ogSiteName || '' }) };
+  });
+  return { leads: out, credits, searched: perQuery.length, scrapes, offset: (start + picked.length) % queries.length };
+}
+
+// Powiadomienia systemowe: każde urządzenie ma własny przełącznik.
+const NOTIFY_KEY = 'klienci-powiadomienia';
+const notifySupported = 'Notification' in window;
+const notifyOn = () => { try { return localStorage.getItem(NOTIFY_KEY) === '1' && notifySupported && Notification.permission === 'granted'; } catch (e) { return false; } };
+async function notify(title, body) {
+  if (!notifyOn()) return;
+  try {
+    const reg = 'serviceWorker' in navigator && await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.showNotification(title, { body, icon: 'ikony/ikona-192.png', badge: 'ikony/ikona-192.png', tag: 'klienci' });
+    else new Notification(title, { body, icon: 'ikony/ikona-192.png' });
+  } catch (e) {}
+}
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+const ONLINE = location.protocol.startsWith('http');
+
+/* ============ Logika ============ */
+const isFollowDue = l => l.status === 'wyslany' && !l.followupAt && since(l.sentAt) >= 7;
+const REPLIED = ['odpowiedz', 'rozmowa', 'zlecenie'];
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {
+    try { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); return true; } catch (e2) { return false; }
+  }
+}
+
+/* ============ Wykres: wysłane i odpowiedzi ============ */
+function smooth(pts) {
+  if (pts.length < 2) return '';
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    d += ` C${p1[0] + (p2[0] - p0[0]) / 6},${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6},${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+function SessionChart({ sessions }) {
+  const data = sessions.slice(-8);
+  if (data.length < 2) return <div className="flex h-[260px] items-center justify-center rounded-xl border border-dashed border-fg/[0.08] text-center text-[13px] text-fg3">Wykres pojawi się po 2 zapisanych sesjach.<br />Sesję mierzysz stoperem w pasku bocznym</div>;
+  const W = 640, H = 240, pad = { l: 28, r: 12, t: 12, b: 12 };
+  const top = Math.ceil(Math.max(4, ...data.map(s => s.sent)) / 4) * 4;
+  const x = i => pad.l + i * (W - pad.l - pad.r) / (data.length - 1);
+  const y = v => pad.t + (1 - v / top) * (H - pad.t - pad.b);
+  const sent = data.map((s, i) => [x(i), y(s.sent)]), rep = data.map((s, i) => [x(i), y(s.replies)]);
+  const last = data.length - 1;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-[260px] w-full" preserveAspectRatio="none">
+        {[0, .25, .5, .75, 1].map(g => <line key={g} x1={pad.l} x2={W - pad.r} y1={y(top * g)} y2={y(top * g)} stroke="rgb(237 237 237 / 0.06)" vectorEffect="non-scaling-stroke" />)}
+        <path d={smooth(sent)} fill="none" stroke="rgb(133 133 139)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        <path d={smooth(rep) + ` L${x(last)},${y(0)} L${x(0)},${y(0)} Z`} fill="rgb(242 107 58 / 0.08)" />
+        <path d={smooth(rep)} fill="none" stroke="rgb(242 107 58)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="relative mt-2 h-4 font-mono text-[11px] text-fg3">
+        {data.map((s, i) => <span key={s.id} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: (x(i) / W * 100) + '%' }}>{fmt(s.date)}</span>)}
+      </div>
+    </div>
+  );
+}
+
+/* ============ Puste miejsce ============ */
+function Empty({ title, children }) {
+  return (
+    <Card className="flex flex-col items-start gap-3 p-8">
+      <div className="text-base font-medium">{title}</div>
+      <div className="max-w-[560px] text-sm leading-6 text-fg2">{children}</div>
+    </Card>
+  );
+}
+
+/* ============ Strona: Pulpit ============ */
+function Stat({ label, value, meta, onClick }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-start gap-3 rounded-2xl border border-fg/[0.06] bg-card p-5 text-left transition-colors duration-150 hover:bg-fg/[0.03]">
+      <span className="text-[13px] text-fg2">{label}</span>
+      <span className="text-[30px] font-medium leading-none tabular-nums">{value}</span>
+      <span className="font-mono text-xs text-fg3">{meta}</span>
+    </button>
+  );
+}
+function Dashboard({ data, go }) {
+  const { leads, sessions, settings } = data;
+  const review = leads.filter(l => l.status === 'nowy' || l.status === 'oceniony');
+  const toSend = leads.filter(l => l.status === 'do_wyslania');
+  const follow = leads.filter(isFollowDue);
+  const sentAll = leads.filter(l => l.sentAt);
+  const replied = leads.filter(l => REPLIED.includes(l.status));
+  const rate = sentAll.length ? Math.round(replied.length / sentAll.length * 100) : 0;
+  const totSent = leads.filter(l => l.sentAt).length, totRep = leads.filter(l => REPLIED.includes(l.status)).length;
+  const funnel = [
+    { label: 'Znalezione', n: leads.length }, { label: 'Nieodrzucone', n: leads.filter(l => l.status !== 'odrzucony').length },
+    { label: 'Wysłane', n: sentAll.length }, { label: 'Odpowiedzi', n: replied.length },
+    { label: 'Rozmowy', n: leads.filter(l => l.status === 'rozmowa' || l.status === 'zlecenie').length }, { label: 'Zlecenia', n: leads.filter(l => l.status === 'zlecenie').length },
+  ];
+  const fmax = Math.max(1, ...funnel.map(f => f.n));
+  const todo = [
+    review.length && { t: `Przejrzyj ${review.length} ${plural(review.length, 'lead', 'leady', 'leadów')}`, a: () => go('leady', 'przeglad') },
+    toSend.length && { t: `Wyślij ${toSend.length} ${plural(toSend.length, 'wiadomość', 'wiadomości', 'wiadomości')}`, a: () => go('wiadomosci') },
+    follow.length && { t: `Wyślij ${follow.length} ${plural(follow.length, 'follow-up', 'follow-upy', 'follow-upów')}`, a: () => go('wiadomosci', 'follow') },
+    leads.filter(l => l.status === 'odpowiedz').length && { t: 'Odpisz organizacjom, które odpowiedziały', a: () => go('leady', 'odpowiedzi') },
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h2 className="text-[32px] font-medium leading-tight">{MONTHS[TODAY.getMonth()]} <span className="text-fg3">{TODAY.getFullYear()}</span></h2>
+        <span className="font-mono text-xs text-fg3">ostatnie wyszukiwanie: {fmtTime(data.lastSearch)}</span>
+      </div>
+      {leads.length === 0 && (
+        <Empty title="Lista jest jeszcze pusta">
+          Kliknij Nowi klienci w prawym górnym rogu, potem Sprawdź teraz. Po 1–2 minutach nowi klienci pojawią się tutaj.
+        </Empty>
+      )}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat label="Do przejrzenia" value={review.length} meta="nowe i ocenione" onClick={() => go('leady', 'przeglad')} />
+        <Stat label="Do wysłania" value={toSend.length} meta="zatwierdzone szkice" onClick={() => go('wiadomosci')} />
+        <Stat label="Follow-upy na dziś" value={follow.length} meta="7+ dni bez odpowiedzi" onClick={() => go('wiadomosci', 'follow')} />
+        <Stat label="Odpowiedzi" value={replied.length} meta={`${rate}% wysłanych`} onClick={() => go('leady', 'odpowiedzi')} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="p-6 xl:col-span-2">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="space-y-2">
+              <div className="text-[13px] text-fg2">Wysłane wiadomości</div>
+              <div className="text-[30px] font-medium leading-none tabular-nums">{totSent} <span className="text-base text-fg3">wysłanych</span></div>
+              <div className="font-mono text-xs text-fg3"><span className="text-accent">{totRep} odpowiedzi</span> · {totSent ? Math.round(totRep / totSent * 100) : 0}% skuteczności</div>
+            </div>
+          </div>
+        </Card>
+        <div className="flex flex-col gap-4">
+          <Card className="p-2">
+            <div className="px-3 pb-2 pt-3 text-[13px] text-fg2">Co dziś zrobić</div>
+            {todo.length === 0 && <p className="px-3 pb-3 text-sm text-fg3">Nic na dziś. Nowi klienci pojawią się po kolejnym wyszukiwaniu</p>}
+            {todo.map((x, i) => (
+              <button key={i} onClick={x.a} className="group flex h-10 w-full items-center justify-between rounded-lg px-3 text-left text-sm transition-colors duration-150 hover:bg-raised">
+                <span>{x.t}</span><Icon name="arrow" className="h-4 w-4 text-fg3 transition-colors group-hover:text-fg" />
+              </button>
+            ))}
+          </Card>
+          <Card className="p-5">
+            <div className="mb-4 text-[13px] text-fg2">Lejek</div>
+            <div className="space-y-3">
+              {funnel.map(f => (
+                <div key={f.label} className="grid grid-cols-[96px_1fr_24px] items-center gap-3 text-[13px]">
+                  <span className="text-fg2">{f.label}</span>
+                  <div className="h-1 rounded-full bg-fg/[0.06]"><div className="h-full rounded-full bg-fg2" style={{ width: (f.n / fmax * 100) + '%' }} /></div>
+                  <span className="text-right font-mono text-xs tabular-nums text-fg2">{f.n}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============ Strona: Leady ============ */
+const LEAD_TABS = [
+  { value: 'wszystkie', label: 'Wszystkie', f: l => true },
+  { value: 'przeglad', label: 'Do przejrzenia', f: l => l.status === 'nowy' || l.status === 'oceniony' },
+  { value: 'do_wyslania', label: 'Do wysłania', f: l => l.status === 'do_wyslania' },
+  { value: 'wyslane', label: 'Wysłane', f: l => l.status === 'wyslany' || l.status === 'brak_odpowiedzi' },
+  { value: 'odpowiedzi', label: 'Odpowiedzi', f: l => REPLIED.includes(l.status) },
+  { value: 'odrzucone', label: 'Odrzucone', f: l => l.status === 'odrzucony' },
+];
+function Leads({ data, tab, setTab, openLead }) {
+  const [q, setQ] = useState('');
+  const [seg, setSeg] = useState('all');
+  const t = LEAD_TABS.find(x => x.value === tab) || LEAD_TABS[0];
+  const list = data.leads.filter(t.f).filter(l => seg === 'all' || l.segment === seg)
+    .filter(l => !q || ((l.org || '') + ' ' + (l.signal || '')).toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (b.score || 0) - (a.score || 0) || ((a.added || '') < (b.added || '') ? 1 : -1));
+  return (
+    <div className="space-y-6">
+      <h2 className="text-[32px] font-medium leading-tight">Leady <span className="text-fg3">{data.leads.length}</span></h2>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Tabs value={tab} onChange={setTab} items={LEAD_TABS.map(x => ({ value: x.value, label: x.label, count: data.leads.filter(x.f).length }))} />
+        <div className="flex gap-2">
+          <div className="relative w-full lg:w-56">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg3"><Icon name="search" /></span>
+            <Input placeholder="Szukaj" value={q} onChange={e => setQ(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={seg} onChange={e => setSeg(e.target.value)} className="w-44 shrink-0">
+            <option value="all">Wszystkie segmenty</option>
+            {Object.entries(SEG).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </Select>
+        </div>
+      </div>
+      <Card className="overflow-hidden">
+        <div className="scroll-thin overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-fg/[0.06] text-left text-xs text-fg3">
+                <th className="h-10 px-5 font-normal">Organizacja i sygnał</th><th className="hidden h-10 px-3 font-normal md:table-cell">Segment</th>
+                <th className="h-10 px-3 font-normal">Ocena</th><th className="hidden h-10 px-3 font-normal lg:table-cell">Projekt</th>
+                <th className="h-10 px-3 font-normal">Status</th><th className="hidden h-10 px-5 text-right font-normal sm:table-cell">Dodano</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.length === 0 && <tr><td colSpan="6" className="h-24 text-center text-fg3">{data.leads.length ? 'Brak leadów w tym widoku' : 'Brak leadów. Kliknij Nowi klienci, potem Sprawdź teraz'}</td></tr>}
+              {list.map(l => { const p = leadProject(l); return (
+                <tr key={l.id} onClick={() => openLead(l.id)} className="cursor-pointer border-b border-fg/[0.04] transition-colors duration-150 last:border-0 hover:bg-fg/[0.03]">
+                  <td className="max-w-[380px] px-5 py-3"><div className="truncate text-fg">{l.org}</div><div className="truncate text-[13px] text-fg3">{l.signal}</div></td>
+                  <td className="hidden whitespace-nowrap px-3 text-[13px] text-fg2 md:table-cell">{SEG[l.segment] || l.segment} <span className="ml-1 font-mono text-xs text-fg3">{l.lang}</span></td>
+                  <td className="px-3"><Score score={l.score} /></td>
+                  <td className="hidden max-w-[220px] truncate px-3 text-[13px] text-fg2 lg:table-cell">{p ? p.title : <span className="text-fg3">–</span>}</td>
+                  <td className="px-3"><Status s={l.status} /></td>
+                  <td className="hidden whitespace-nowrap px-5 text-right font-mono text-xs text-fg3 sm:table-cell">{fmt(l.added)}</td>
+                </tr>); })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* Kadr: dopasowany projekt jako klatka ze storyboardu */
+function Frame({ p }) {
+  return (
+    <a href={p.url} target="_blank" rel="noopener" className="group block rounded-xl border border-fg/[0.08] bg-side p-2 transition-colors duration-150 hover:border-fg/20">
+      <div className="relative aspect-video overflow-hidden rounded-[6px] bg-[radial-gradient(120%_90%_at_30%_20%,#2c2c2f_0%,#18181a_55%,#0f0f10_100%)]">
+        {[['left-3 top-3', 'border-l border-t'], ['right-3 top-3', 'border-r border-t'], ['left-3 bottom-3', 'border-l border-b'], ['right-3 bottom-3', 'border-r border-b']].map(([pos, b], i) => <span key={i} className={cn('absolute h-4 w-4 border-fg/30', pos, b)} />)}
+        <div className="absolute inset-x-6 top-1/2 -translate-y-1/2"><div className="text-[22px] font-medium leading-tight text-fg">{p.title}</div><div className="mt-2 text-[13px] text-fg2">{p.type}</div></div>
+        <span className="absolute bottom-3 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-accent" />
+      </div>
+      <div className="flex items-center justify-between px-2 pb-1 pt-3 text-[13px]"><span className="text-fg2">Otwórz na pawelmotion.com</span><Icon name="external" className="h-4 w-4 text-fg3 transition-colors group-hover:text-fg" /></div>
+    </a>
+  );
+}
+
+function LeadSheet({ lead, patchLead, close, goMessage }) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState(REJECT[0]);
+  const [notes, setNotes] = useState('');
+  const [reply, setReply] = useState('');
+  useEffect(() => { setRejecting(false); if (lead) { setNotes(lead.notes || ''); setReply(lead.reply || ''); } }, [lead && lead.id]);
+  if (!lead) return null;
+  const p = leadProject(lead);
+  const set = (patch, msg) => { patchLead(lead.id, patch); if (msg) toast(msg, lead.org); };
+  const Row = ({ k, children }) => <div className="grid grid-cols-[112px_1fr] gap-4 text-sm"><span className="text-fg3">{k}</span><div className="min-w-0 break-words text-fg">{children}</div></div>;
+  return (
+    <Sheet open={!!lead} onClose={close}>
+      <div className="space-y-3 p-6 pr-12">
+        <div className="flex flex-wrap items-center gap-4"><Status s={lead.status} /><Score score={lead.score} /><span className="text-[13px] text-fg3">{SEG[lead.segment] || lead.segment}</span></div>
+        <h2 className="text-xl font-medium leading-snug">{lead.org}</h2>
+        <p className="font-mono text-xs text-fg3">{lead.country} · {lead.lang} · dodano {fmt(lead.added)}</p>
+      </div>
+      <Hair />
+      <div className="space-y-4 p-6">
+        <Row k="Sygnał">{lead.signal}</Row>
+        {lead.source && <Row k="Źródło"><a href={lead.source} target="_blank" rel="noopener" className="inline-flex items-center gap-1 break-all text-fg underline decoration-fg/30 underline-offset-4 hover:decoration-fg">{lead.source.replace(/^https?:\/\//, '')}<Icon name="external" className="h-3.5 w-3.5 text-fg3" /></a></Row>}
+        <Row k="Kontakt">{lead.contact || '[do sprawdzenia]'}<div className="text-[13px] text-fg3">ogólny kontakt organizacji</div></Row>
+        {lead.score && <Row k="Dlaczego ta ocena">{lead.reason}</Row>}
+        {lead.sentAt && <Row k="Wysłano"><span className="font-mono text-[13px]">{fmt(lead.sentAt)}{lead.followupAt && ' · follow-up ' + fmt(lead.followupAt)}</span></Row>}
+        {lead.status === 'odrzucony' && <Row k="Powód">{lead.rejectReason}</Row>}
+      </div>
+      {p && <div className="space-y-3 px-6 pb-6"><div className="text-[13px] text-fg3">Dopasowany projekt</div><Frame p={p} /></div>}
+      {lead.draft && (
+        <div className="px-6 pb-6"><div className="rounded-xl border border-fg/[0.06] bg-side p-4">
+          <div className="text-[13px] text-fg3">Szkic</div><div className="mt-1 text-sm text-fg">{lead.draft.subject}</div>
+          <p className="mt-2 line-clamp-3 whitespace-pre-line text-[13px] leading-5 text-fg2">{lead.draft.body}</p>
+        </div></div>
+      )}
+      {lead.status === 'nowy' && <div className="mx-6 mb-6 rounded-lg border border-fg/[0.08] bg-raised px-4 py-3 text-[13px] text-fg2">Ten lead czeka na ocenę. Kliknij Nowi klienci, potem Oceń bez oceny</div>}
+      <div className="space-y-4 px-6 pb-6">
+        {(REPLIED.includes(lead.status) || lead.status === 'wyslany' || lead.status === 'brak_odpowiedzi') && (
+          <div className="space-y-2"><Label>Odpowiedź organizacji</Label><Textarea rows="2" placeholder="Co odpisali" value={reply} onChange={e => setReply(e.target.value)} onBlur={() => reply !== (lead.reply || '') && set({ reply })} /></div>
+        )}
+        <div className="space-y-2"><Label>Notatki</Label><Textarea rows="2" placeholder="Twoje notatki" value={notes} onChange={e => setNotes(e.target.value)} onBlur={() => notes !== (lead.notes || '') && set({ notes })} /></div>
+      </div>
+      <div className="mt-auto border-t border-fg/[0.06] p-6">
+        {rejecting ? (
+          <div className="space-y-3">
+            <Label>Powód odrzucenia</Label>
+            <Select value={reason} onChange={e => setReason(e.target.value)} className="w-full">{REJECT.map(r => <option key={r}>{r}</option>)}</Select>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="text-neg" onClick={() => { set({ status: 'odrzucony', rejectReason: reason }, 'Lead odrzucony'); setRejecting(false); }}>Odrzuć</Button>
+              <Button variant="ghost" onClick={() => setRejecting(false)}>Anuluj</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {lead.status === 'oceniony' && <Button onClick={() => set({ status: 'do_wyslania' }, 'Zatwierdzono do wysłania')}><Icon name="check" />Zatwierdź do wysłania</Button>}
+            {(lead.status === 'oceniony' || lead.status === 'do_wyslania') && lead.draft && <Button variant="secondary" onClick={() => goMessage(lead.id)}><Icon name="mail" />Edytuj wiadomość</Button>}
+            {['nowy', 'oceniony', 'do_wyslania'].includes(lead.status) && <Button variant="danger" onClick={() => setRejecting(true)}>Odrzuć</Button>}
+            {['wyslany', 'brak_odpowiedzi', 'odpowiedz', 'rozmowa'].includes(lead.status) && (<>
+              {lead.status !== 'odpowiedz' && lead.status !== 'rozmowa' && <Button variant="secondary" onClick={() => set({ status: 'odpowiedz' }, 'Zapisano odpowiedź')}><Icon name="reply" />Odpowiedzieli</Button>}
+              {lead.status !== 'rozmowa' && <Button variant="secondary" onClick={() => set({ status: 'rozmowa' }, 'Zapisano rozmowę')}>Rozmowa</Button>}
+              <Button onClick={() => set({ status: 'zlecenie' }, 'Zapisano zlecenie')}>Zlecenie</Button>
+              {lead.status === 'wyslany' && <Button variant="ghost" onClick={() => set({ status: 'brak_odpowiedzi' }, 'Zapisano brak odpowiedzi')}>Brak odpowiedzi</Button>}
+            </>)}
+            {lead.status === 'odrzucony' && <Button variant="secondary" onClick={() => set({ status: lead.score ? 'oceniony' : 'nowy', rejectReason: '' }, 'Przywrócono lead')}><Icon name="reset" />Przywróć</Button>}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/* ============ Strona: Wiadomości ============ */
+function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLead }) {
+  const drafts = data.leads.filter(l => (l.status === 'do_wyslania' || l.status === 'oceniony') && l.draft)
+    .sort((a, b) => (a.status === 'do_wyslania' ? -1 : 1) - (b.status === 'do_wyslania' ? -1 : 1) || (b.score || 0) - (a.score || 0));
+  const follows = data.leads.filter(isFollowDue);
+  const list = tab === 'follow' ? follows : drafts;
+  const cur = list.find(l => l.id === selected) || list[0];
+  const saved = cur ? (tab === 'follow' ? (cur.followDraft || makeFollowup(cur)) : cur.draft) : null;
+  const [msg, setMsg] = useState(saved);
+  useEffect(() => { setMsg(saved); }, [cur && cur.id, tab]);
+  const words = msg ? msg.body.trim().split(/\s+/).length : 0;
+  const persist = () => { if (!cur || !msg) return; if (JSON.stringify(msg) === JSON.stringify(saved)) return; patchLead(cur.id, tab === 'follow' ? { followDraft: msg } : { draft: msg }); };
+  const markSent = () => {
+    persist();
+    if (tab === 'follow') { patchLead(cur.id, { followupAt: iso(TODAY) }); toast('Follow-up oznaczony jako wysłany', cur.org); }
+    else { patchLead(cur.id, { status: 'wyslany', sentAt: iso(TODAY) }); toast('Oznaczono jako wysłane', cur.org + ' · follow-up pojawi się za 7 dni'); }
+    setSelected(null);
+  };
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h2 className="text-[32px] font-medium leading-tight">Wiadomości</h2>
+        <Tabs value={tab} onChange={v => { persist(); setTab(v); setSelected(null); }} items={[{ value: 'szkice', label: 'Szkice', count: drafts.length }, { value: 'follow', label: 'Follow-upy', count: follows.length }]} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+        <Card className="h-fit p-2">
+          {list.length === 0 && <p className="p-4 text-sm text-fg3">{tab === 'follow' ? 'Brak follow-upów na dziś' : 'Brak szkiców. Pojawią się po ocenie nowych leadów'}</p>}
+          {list.map(l => (
+            <button key={l.id} onClick={() => { persist(); setSelected(l.id); }}
+              className={cn('flex w-full flex-col gap-1 rounded-lg px-3 py-3 text-left transition-colors duration-150', cur && cur.id === l.id ? 'bg-raised shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'hover:bg-fg/[0.03]')}>
+              <div className="flex items-center justify-between gap-3"><span className="truncate text-sm">{l.org}</span><Score score={l.score} /></div>
+              <div className="flex items-center gap-3">{tab === 'follow' ? <span className="font-mono text-xs text-fg3">wysłano {since(l.sentAt)} dni temu</span> : <Status s={l.status} />}<span className="font-mono text-xs text-fg3">{l.lang}</span></div>
+            </button>
+          ))}
+        </Card>
+        {cur && msg && (
+          <Card className="flex flex-col">
+            <div className="flex flex-wrap items-start justify-between gap-3 p-6 pb-4">
+              <div className="space-y-1"><div className="text-[13px] text-fg3">{tab === 'follow' ? 'Follow-up do' : 'Do'}</div><div className="text-base font-medium">{cur.org}</div><div className="font-mono text-xs text-fg3">{cur.contact}</div></div>
+              <Button variant="link" size="sm" className="h-auto px-0" onClick={() => openLead(cur.id)}>Szczegóły leada</Button>
+            </div>
+            {cur.status === 'oceniony' && tab !== 'follow' && (
+              <div className="mx-6 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-fg/[0.08] bg-raised px-4 py-3 text-sm">
+                <span className="text-fg2">Lead czeka na zatwierdzenie</span>
+                <Button size="sm" variant="secondary" onClick={() => { patchLead(cur.id, { status: 'do_wyslania' }); toast('Zatwierdzono do wysłania', cur.org); }}>Zatwierdź</Button>
+              </div>
+            )}
+            <div className="space-y-4 px-6">
+              <div className="space-y-2"><Label>Temat</Label><Input value={msg.subject} onChange={e => setMsg({ ...msg, subject: e.target.value })} onBlur={persist} /></div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between"><Label>Treść</Label><span className={cn('font-mono text-xs tabular-nums', words > 130 ? 'text-accent' : 'text-fg3')}>{words} / 120 słów</span></div>
+                <Textarea rows="14" value={msg.body} onChange={e => setMsg({ ...msg, body: e.target.value })} onBlur={persist} />
+              </div>
+              <p className="flex items-start gap-2 text-[13px] text-fg3"><Icon name="info" className="mt-0.5 h-4 w-4" />Szkic napisało AI. Sprawdź fakty w źródle i wyślij sam, pojedynczo, ze swojej poczty</p>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-2 border-t border-fg/[0.06] p-6">
+              <Button variant="secondary" onClick={async () => toast(await copyText(msg.subject + '\n\n' + withSig(msg.body, data.settings.signature)) ? 'Skopiowano do schowka' : 'Nie udało się skopiować', 'Wklej do swojej poczty')}><Icon name="copy" />Kopiuj</Button>
+              <Button variant="secondary" onClick={() => { persist(); openMail(data.settings, emailOf(cur.contact), msg.subject, withSig(msg.body, data.settings.signature)); }}><Icon name="mail" />{data.settings.gmail ? 'Otwórz w Gmailu' : 'Otwórz w poczcie'}</Button>
+              <Button className="sm:ml-auto" onClick={markSent}><Icon name="check" />Oznacz jako wysłane</Button>
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============ Strona: Ustawienia ============ */
+function Section({ title, desc, children, className }) {
+  return <Card className={cn('p-6', className)}><div className="mb-5 space-y-1"><h3 className="text-base font-medium">{title}</h3>{desc && <p className="text-[13px] text-fg3">{desc}</p>}</div>{children}</Card>;
+}
+function Settings({ data, patchSettings, conn, connect, refresh, gh, ghConnect, ghDisconnect, fcKey, saveFcKey }) {
+  const s = data.settings;
+  const [dir, setDir] = useState({ text: '', why: '' });
+  const [tok, setTok] = useState('');
+  const [gmail, setGmail] = useState(s.gmail || '');
+  const [sig, setSig] = useState(s.signature || '');
+  const [fcIn, setFcIn] = useState('');
+  const [fcRemember, setFcRemember] = useState(true);
+  const [nq, setNq] = useState({ q: '', segment: 'PL-WYD', country: 'PL' });
+  const queries = s.queries || [];
+  const setQueries = q => patchSettings({ queries: q });
+  const [remember, setRemember] = useState(true);
+  const exportJson = () => {
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'kopia-klienci-' + iso(TODAY) + '.json'; a.click();
+      toast('Zapisano kopię zapasową', 'Plik trafił do folderu Pobrane');
+    } catch (e) { toast('Nie udało się zapisać kopii'); }
+  };
+  const mixSum = Object.values(s.mix).reduce((a, b) => a + (Number(b) || 0), 0);
+  return (
+    <div className="space-y-6">
+      <h2 className="text-[32px] font-medium leading-tight">Ustawienia</h2>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Section title="GitHub" desc="Nocny automat zapisuje nowych klientów w repozytorium na GitHubie. Po połączeniu aplikacja pobiera je stamtąd i tam zapisuje Twoje zmiany" className="xl:col-span-2">
+          {gh ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-fg/[0.08] bg-side px-4 py-3">
+                <div className="flex items-center gap-3 text-sm"><span className="h-2 w-2 rounded-full bg-pos" />Połączono z GitHubem</div>
+                <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={refresh}><Icon name="reset" />Pobierz teraz</Button><Button size="sm" variant="secondary" onClick={ghDisconnect}>Odłącz</Button></div>
+              </div>
+              <p className="text-[13px] leading-5 text-fg3">Aplikacja sprawdza GitHuba przy otwarciu i co 2 minuty. Na cudzym komputerze kliknij „Odłącz” przed wyjściem.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Token GitHub (tylko do repozytorium klienci-chrzescijanscy)</Label>
+                <Input type="password" autoComplete="off" placeholder="github_pat_..." value={tok} onChange={e => setTok(e.target.value.trim())} className="font-mono" />
+              </div>
+              <label className="flex items-center gap-3 text-sm text-fg2"><Switch checked={remember} onChange={setRemember} />Zapamiętaj na tym komputerze (wyłącz na cudzym)</label>
+              <div className="flex justify-end"><Button size="sm" disabled={!tok} onClick={async () => { if (await ghConnect(tok, remember)) setTok(''); }}>Połącz z GitHubem</Button></div>
+              <p className="text-[13px] leading-5 text-fg3">Token zostaje tylko w tej przeglądarce. Nie trafia do pliku danych ani do repozytorium.</p>
+            </div>
+          )}
+        </Section>
+        <Section title="Powiadomienia" desc="Osobno na każdym urządzeniu: po sprawdzeniu i gdy pojawią się nowi klienci z drugiego urządzenia">
+          <NotifySetting />
+        </Section>
+        <Section title="Firecrawl" desc="Wyszukiwarka, której aplikacja używa do szukania nowych klientów">
+          {fcKey ? (
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-fg/[0.08] bg-side px-4 py-3">
+              <div className="flex items-center gap-3 text-sm"><span className="h-2 w-2 rounded-full bg-pos" />Klucz zapisany w tej przeglądarce</div>
+              <Button size="sm" variant="secondary" onClick={() => saveFcKey('', false)}>Usuń klucz</Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2"><Label>Klucz API Firecrawl</Label><Input type="password" autoComplete="off" placeholder="fc-..." value={fcIn} onChange={e => setFcIn(e.target.value.trim())} className="font-mono" /></div>
+              <label className="flex items-center gap-3 text-sm text-fg2"><Switch checked={fcRemember} onChange={setFcRemember} />Zapamiętaj na tym komputerze (wyłącz na cudzym)</label>
+              <div className="flex justify-end"><Button size="sm" disabled={!fcIn} onClick={() => { saveFcKey(fcIn, fcRemember); setFcIn(''); }}>Zapisz klucz</Button></div>
+            </div>
+          )}
+          <p className="mt-4 text-[13px] leading-5 text-fg3">Klucz znajdziesz po zalogowaniu na firecrawl.dev (API Keys). Zostaje tylko w tej przeglądarce.</p>
+        </Section>
+        <Section title="Zapytania" desc="Aplikacja przy każdym sprawdzeniu bierze 6 kolejnych włączonych zapytań, po kolei w kółko">
+          <div className="space-y-1">
+            {queries.length === 0 && <p className="text-sm text-fg3">Brak zapytań. Dodaj pierwsze poniżej.</p>}
+            {queries.map((q, i) => (
+              <div key={i} className="flex min-h-9 items-center gap-3 text-sm">
+                <Switch checked={q.on} onChange={v => setQueries(queries.map((x, j) => j === i ? { ...x, on: v } : x))} />
+                <span className={cn('min-w-0 flex-1 break-words', q.on ? 'text-fg' : 'text-fg3')}>{q.q}</span>
+                <span className="font-mono text-xs text-fg3">{q.segment} · {q.country}</span>
+                <button className="text-fg3 hover:text-fg" title="Usuń" onClick={() => setQueries(queries.filter((_, j) => j !== i))}>×</button>
+              </div>
+            ))}
+          </div>
+          <Hair className="my-4" />
+          <div className="flex flex-wrap gap-2">
+            <Input placeholder="nowe zapytanie, np. festiwal uwielbienia 2027" value={nq.q} onChange={e => setNq({ ...nq, q: e.target.value })} className="min-w-[200px] flex-1" />
+            <Select value={nq.segment} onChange={e => setNq({ ...nq, segment: e.target.value })}>{Object.keys(SEG).map(k => <option key={k} value={k}>{SEG[k]}</option>)}</Select>
+            <Select value={nq.country} onChange={e => setNq({ ...nq, country: e.target.value })}>{['PL', 'US', 'GB'].map(k => <option key={k}>{k}</option>)}</Select>
+            <Button size="sm" variant="secondary" disabled={!nq.q.trim()} onClick={() => { setQueries([...queries, { ...nq, q: nq.q.trim(), on: true }]); setNq({ ...nq, q: '' }); }}>Dodaj</Button>
+          </div>
+        </Section>
+        <Section title="Poczta" desc="„Otwórz w Gmailu” otwiera nową wiadomość w Gmailu na tym koncie. Wysyłasz sam, jak dotąd">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Mój adres Gmail</Label>
+              <Input type="email" value={gmail} onChange={e => setGmail(e.target.value.trim())} onBlur={() => gmail !== (s.gmail || '') && patchSettings({ gmail })} className="font-mono" />
+            </div>
+            <div className="space-y-2">
+              <Label>Mój podpis (wstawiany zamiast [Twój podpis])</Label>
+              <Textarea rows="3" value={sig} onChange={e => setSig(e.target.value)} onBlur={() => sig !== (s.signature || '') && patchSettings({ signature: sig })} />
+            </div>
+            <p className="text-[13px] leading-5 text-fg3">Zaloguj się w przeglądarce na to konto Google. Bez adresu aplikacja otworzy domyślny program pocztowy.</p>
+          </div>
+        </Section>
+        <Section title="Dane i zapis" desc="Aplikacja czyta listę z pliku prototyp/dane/leady.js. Claude Code dopisuje tam nowych klientów, a aplikacja zapisuje Twoje zmiany">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-fg/[0.08] bg-side px-4 py-3">
+              <div className="flex items-center gap-3 text-sm">
+                <span className={cn('h-2 w-2 rounded-full', conn === 'ok' ? 'bg-pos' : 'bg-accent')} />
+                {conn === 'ok' ? 'Zapis włączony' : conn === 'unsupported' ? 'Ta przeglądarka nie zapisuje zmian' : 'Zapis wyłączony'}
+              </div>
+              {conn !== 'ok' && conn !== 'unsupported' && <Button size="sm" variant="secondary" onClick={connect}><Icon name="folder" />{conn === 'permission' ? 'Zezwól na zapis' : 'Wybierz folder dane'}</Button>}
+            </div>
+            <p className="text-[13px] leading-5 text-fg3">
+              {conn === 'unsupported' ? 'Otwórz aplikację w Chrome albo Edge, żeby zmiany zapisywały się w pliku.' :
+                'Za pierwszym razem wskaż folder prototyp/dane. Przeglądarka zapyta o dostęp: wybierz „Zezwalaj przy każdej wizycie”, jeśli się pojawi. Zmiany zrobione przed włączeniem zapisu czekają i zapiszą się po połączeniu.'}
+            </p>
+            <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
+              <span className="text-fg2">Ostatnie wyszukiwanie</span><span className="font-mono text-xs text-fg3">{fmtTime(data.lastSearch)}</span>
+              <span className="text-fg2">Ostatnia zmiana pliku</span><span className="font-mono text-xs text-fg3">{fmtTime(data.updated)}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={refresh}><Icon name="reset" />Odśwież teraz</Button>
+              <Button variant="ghost" onClick={exportJson}><Icon name="download" />Kopia zapasowa</Button>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Kierunek" desc="Twoje decyzje po sesjach. Najnowsza ma pierwszeństwo przy następnym wyszukiwaniu">
+          <div className="space-y-2">
+            {s.direction.length === 0 && <p className="text-[13px] text-fg3">Brak decyzji. Dopisz np. „Więcej festiwali, mniej parafii”</p>}
+            {s.direction.slice().reverse().map((d, i) => (
+              <div key={i} className="rounded-lg border border-fg/[0.06] bg-side px-4 py-3">
+                <div className="flex items-center justify-between gap-3"><span className="text-sm">{d.text}</span><span className="font-mono text-xs text-fg3">{fmt(d.date)}</span></div>
+                {d.why && <div className="mt-0.5 text-[13px] text-fg3">{d.why}</div>}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <Input placeholder="np. Więcej zagranicy" value={dir.text} onChange={e => setDir({ ...dir, text: e.target.value })} />
+            <Input placeholder="Dlaczego" value={dir.why} onChange={e => setDir({ ...dir, why: e.target.value })} />
+            <Button disabled={!dir.text.trim()} onClick={() => { patchSettings({ direction: [...s.direction, { date: iso(TODAY), ...dir }] }); setDir({ text: '', why: '' }); toast('Dodano decyzję', 'Uwzględni ją następne wyszukiwanie'); }}><Icon name="plus" />Dodaj</Button>
+          </div>
+        </Section>
+
+        <Section title="Kryteria wyszukiwania" desc="Proporcja segmentów, liczba nowych leadów i sygnały, że organizacja potrzebuje animacji teraz">
+          <div className="space-y-3">
+            {Object.keys(SEG).map(k => (
+              <div key={k} className="grid grid-cols-[120px_1fr_44px] items-center gap-4 text-sm">
+                <span className="text-fg2">{SEG[k]}</span>
+                <input type="range" min="0" max="100" step="5" defaultValue={s.mix[k] ?? 0} onMouseUp={e => patchSettings({ mix: { ...s.mix, [k]: Number(e.target.value) } })} onKeyUp={e => patchSettings({ mix: { ...s.mix, [k]: Number(e.target.value) } })} />
+                <span className="text-right font-mono text-xs tabular-nums text-fg2">{s.mix[k] ?? 0}%</span>
+              </div>
+            ))}
+            {mixSum !== 100 && <p className="font-mono text-xs text-fg3">suma {mixSum}%, wyszukiwanie przeliczy do 100%</p>}
+          </div>
+          <div className="mt-5 flex items-center justify-between gap-4">
+            <Label>Nowych leadów na jedno wyszukiwanie</Label>
+            <Select value={s.perDay} onChange={e => patchSettings({ perDay: Number(e.target.value) })} className="w-20 font-mono">{[3, 5, 8, 10, 15].map(n => <option key={n}>{n}</option>)}</Select>
+          </div>
+          {s.signals.length > 0 && <>
+            <Hair className="my-5" />
+            <div className="space-y-1">
+              {s.signals.map((sg, i) => (
+                <div key={i} className="flex h-9 items-center justify-between gap-4 text-sm">
+                  <span className={sg.on ? 'text-fg' : 'text-fg3'}>{sg.t}</span>
+                  <Switch checked={sg.on} onChange={v => patchSettings({ signals: s.signals.map((x, j) => j === i ? { ...x, on: v } : x) })} />
+                </div>
+              ))}
+            </div>
+          </>}
+        </Section>
+
+
+        <Section title="Portfolio" desc="Projekty, które AI dobiera do leadów. Źródło: pawelmotion.com, pełna lista w portfolio.md" className="xl:col-span-2">
+          <div className="scroll-thin overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-fg/[0.06] text-left text-xs text-fg3"><th className="h-9 pr-3 font-normal">Projekt</th><th className="hidden h-9 px-3 font-normal sm:table-cell">Typ</th><th className="hidden h-9 px-3 font-normal md:table-cell">Tagi</th><th className="h-9 pl-3 text-right font-normal">Linki</th></tr></thead>
+              <tbody>
+                {PORTFOLIO.map(p => (
+                  <tr key={p.id} className="border-b border-fg/[0.04] last:border-0">
+                    <td className="py-3 pr-3">{p.title}</td><td className="hidden px-3 text-[13px] text-fg2 sm:table-cell">{p.type}</td>
+                    <td className="hidden px-3 font-mono text-xs text-fg3 md:table-cell">{p.tags.join(' · ')}</td>
+                    <td className="whitespace-nowrap pl-3 text-right font-mono text-xs"><a className="text-fg2 hover:text-fg" href={p.pl} target="_blank" rel="noopener">PL</a><span className="mx-2 text-fg3">·</span><a className="text-fg2 hover:text-fg" href={p.en} target="_blank" rel="noopener">EN</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+function NotifySetting() {
+  const [on, setOn] = useState(notifyOn());
+  const toggle = async v => {
+    if (!notifySupported) return toast('To urządzenie nie obsługuje powiadomień');
+    if (v) {
+      const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      if (p !== 'granted') { toast('Brak zgody na powiadomienia', 'Zezwól na nie w ustawieniach przeglądarki lub telefonu'); return; }
+    }
+    try { localStorage.setItem(NOTIFY_KEY, v ? '1' : '0'); } catch (e) {}
+    setOn(v);
+    if (v) notify('Powiadomienia włączone', 'Tak będzie wyglądać informacja o nowych klientach');
+  };
+  return (
+    <div className="space-y-3">
+      <label className="flex items-center justify-between gap-4 text-sm"><span className="text-fg">Powiadomienia na tym urządzeniu</span><Switch checked={on} onChange={toggle} /></label>
+      <p className="text-[13px] leading-5 text-fg3">Działają, gdy aplikacja jest otwarta lub zminimalizowana. Po całkowitym zamknięciu nie przychodzą.</p>
+    </div>
+  );
+}
+
+/* ============ Okno: jak szukać nowych klientów ============ */
+function SearchInfo({ open, onClose, lastSearch, search, start, scoreNow, unscored, hasKey, goSettings }) {
+  const r = search.result;
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <h2 className="text-lg font-medium">Nowi klienci</h2>
+      <p className="mt-1 font-mono text-xs text-fg3">ostatnie wyszukiwanie: {fmtTime(lastSearch)}</p>
+      {!hasKey ? (
+        <p className="mt-5 text-sm leading-6 text-fg2">Najpierw wklej klucz Firecrawl w Ustawieniach. Wystarczy raz na tym urządzeniu.</p>
+      ) : (
+        <p className="mt-5 text-sm leading-6 text-fg2">Aplikacja przeszuka internet według zapytań z Ustawień, dopisze nowe organizacje i oceni je według reguł (1–3) z dopasowanym projektem. Jedno sprawdzenie zużywa do ok. 22 kredytów Firecrawl i trwa 1–2 minuty.</p>
+      )}
+      {search.log.length > 0 && (
+        <div className="scroll-thin mt-4 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-fg/[0.08] bg-side px-3 py-2 font-mono text-xs leading-5 text-fg3">
+          {search.log.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
+      {r && (
+        <div className="mt-4 space-y-1 text-sm">
+          {r.error ? <p className="text-accent">{r.error}</p> : r.scored !== undefined ? <p className="text-fg">Ocenione leady: {r.scored}</p> : <p className="text-fg">{r.leads.length ? `Nowi klienci: ${r.leads.length}` : 'Nic nowego'}</p>}
+          {r.leads && r.leads.length > 0 && <p className="text-fg2">{r.leads.map(l => l.org).join(', ')}</p>}
+          {r.credits > 0 && <p className="font-mono text-xs text-fg3">zużyte kredyty Firecrawl: ok. {r.credits}</p>}
+        </div>
+      )}
+      <div className="mt-5 flex justify-end gap-2">
+        {!hasKey ? <Button onClick={() => { onClose(); goSettings(); }}>Przejdź do Ustawień</Button>
+          : <>
+            {unscored > 0 && <Button variant="secondary" disabled={search.running} onClick={scoreNow}>Oceń bez oceny ({Math.min(unscored, FC_LIMIT.scrapes)})</Button>}
+            <Button disabled={search.running} onClick={start}><Icon name="search" />{search.running ? 'Pracuję…' : 'Sprawdź teraz'}</Button>
+          </>}
+        <Button variant="secondary" onClick={onClose}>Zamknij</Button>
+      </div>
+    </Dialog>
+  );
+}
+
+/* ============ Pierwsze uruchomienie: połączenie z GitHubem ============ */
+function StartScreen({ ghConnect }) {
+  const [tok, setTok] = useState('');
+  const [remember, setRemember] = useState(true);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mx-auto max-w-[480px] p-6 pt-16">
+      <div className="text-2xl font-medium">Klienci</div>
+      <p className="mt-2 text-sm leading-6 text-fg2">Twoje dane są w prywatnym repozytorium na GitHubie. Wklej token GitHub, żeby je pobrać. Wystarczy raz na tym urządzeniu.</p>
+      <div className="mt-6 space-y-4">
+        <div className="space-y-2"><Label>Token GitHub</Label><Input type="password" autoComplete="off" placeholder="github_pat_..." value={tok} onChange={e => setTok(e.target.value.trim())} className="font-mono" /></div>
+        <label className="flex items-center gap-3 text-sm text-fg2"><Switch checked={remember} onChange={setRemember} />Zapamiętaj na tym urządzeniu (wyłącz na cudzym)</label>
+        <Button className="w-full" disabled={!tok || busy} onClick={async () => { setBusy(true); await ghConnect(tok, remember); setBusy(false); }}>{busy ? 'Łączę…' : 'Połącz z GitHubem'}</Button>
+      </div>
+      <p className="mt-6 text-[13px] leading-5 text-fg3">Klucz Firecrawl do szukania nowych klientów wpiszesz potem w Ustawieniach.</p>
+      <Toaster />
+    </div>
+  );
+}
+
+/* ============ Aplikacja ============ */
+const NAV = [
+  { id: 'pulpit', label: 'Pulpit', icon: 'dashboard' }, { id: 'leady', label: 'Leady', icon: 'users' },
+  { id: 'wiadomosci', label: 'Wiadomości', icon: 'mail' }, { id: 'ustawienia', label: 'Ustawienia', icon: 'settings' },
+];
+const START = window.DANE ? normalize(window.DANE) : null;
+function App() {
+  const [data, setData] = useState(() => START ? getPending().reduce(applyOp, START) : null);
+  const [conn, setConn] = useState(fsSupported ? 'none' : 'unsupported'); // none | permission | ok | unsupported
+  const handleRef = useRef(null);
+  const known = useRef(new Set(START ? START.leads.map(l => l.id) : []));
+  const [page, setPage] = useState('pulpit');
+  const [leadTab, setLeadTab] = useState('wszystkie');
+  const [msgTab, setMsgTab] = useState('szkice');
+  const [msgSel, setMsgSel] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [session, setSession] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  const [gh, setGh] = useState(() => !!getToken());
+  const [fcKey, setFcKeyState] = useState(() => getStore(FC_KEY));
+  const [search, setSearch] = useState({ running: false, log: [], result: null });
+
+  // Nowe dane z pliku: pokaż je i powiedz, ilu klientów przybyło.
+  const accept = (fileData, quiet) => {
+    const merged = getPending().reduce(applyOp, fileData);
+    const fresh = merged.leads.filter(l => !known.current.has(l.id));
+    merged.leads.forEach(l => known.current.add(l.id));
+    if (fresh.length && !quiet) { toast(`Nowi klienci: ${fresh.length}`, fresh.slice(0, 3).map(l => l.org).join(', ')); notify(`Nowi klienci: ${fresh.length}`, fresh.slice(0, 3).map(l => l.org).join(', ')); }
+    setData(merged);
+  };
+  const refresh = async (quiet) => {
+    const tok = getToken();
+    if (tok) {
+      try { accept((await ghRead(tok)).data, quiet); if (getPending().length) flushGh(tok); }
+      catch (e) { if (!quiet) toast('Nie udało się pobrać z GitHuba', ghError(e)); }
+      return;
+    }
+    if (ONLINE) return;
+    try { accept(handleRef.current && conn === 'ok' ? await readViaHandle(handleRef.current) : await readViaScript(), quiet); }
+    catch (e) { if (!quiet) toast('Nie udało się odczytać pliku danych', 'Sprawdź, czy istnieje prototyp/dane/leady.js'); }
+  };
+  // GitHub: pobieramy najnowszą wersję, nakładamy czekające zmiany i zapisujemy. Gdy ktoś (automat) zapisał w międzyczasie, próbujemy jeszcze raz.
+  const ghBusy = useRef(false);
+  const flushGh = async tok => {
+    if (ghBusy.current) return false;
+    ghBusy.current = true;
+    let ok = false;
+    try { ok = await flushGhNow(tok); } finally { ghBusy.current = false; }
+    if (ok && getPending().length && getToken()) setTimeout(() => flushGh(getToken()), 500);
+    return ok;
+  };
+  const flushGhNow = async tok => {
+    for (let i = 0; i < 3; i++) {
+      const queue = getPending(); if (!queue.length) return true;
+      try {
+        const { data: cur, sha } = await ghRead(tok);
+        const next = queue.reduce(applyOp, cur); next.updated = new Date().toISOString();
+        await ghWrite(tok, next, sha, 'Aplikacja: ' + queue.length + ' ' + plural(queue.length, 'zmiana', 'zmiany', 'zmian'));
+        setPending(getPending().slice(queue.length));
+        next.leads.forEach(l => known.current.add(l.id)); setData(getPending().reduce(applyOp, next));
+        return true;
+      } catch (e) { if (e.status !== 409 && e.status !== 422) { toast('Nie udało się zapisać na GitHubie', ghError(e) + '. Zmiana poczeka i zapisze się później'); return false; } }
+    }
+    return false;
+  };
+  const ghConnect = async (tok, remember) => {
+    try {
+      const { data: cur } = await ghRead(tok);
+      setToken(tok, remember); setGh(true); accept(cur, true);
+      if (getPending().length) await flushGh(tok);
+      toast('Połączono z GitHubem', `Klientów na liście: ${cur.leads.length}`);
+      return true;
+    } catch (e) { toast('Nie udało się połączyć', ghError(e)); return false; }
+  };
+  const saveFcKey = (k, remember) => { setStore(FC_KEY, k, remember); setFcKeyState(k); toast(k ? 'Zapisano klucz Firecrawl' : 'Usunięto klucz Firecrawl', k ? 'Możesz szukać przyciskiem Nowi klienci' : 'Klucz usunięty z tej przeglądarki'); };
+  const startSearch = async () => {
+    const key = getStore(FC_KEY); if (!key || search.running) return;
+    const log = []; const say = m => { log.push(m); setSearch(s => ({ ...s, log: [...log] })); };
+    setSearch({ running: true, log: [], result: null });
+    try {
+      let base = data;
+      if (getToken()) { say('Pobieram aktualną listę z GitHuba'); try { base = getPending().reduce(applyOp, (await ghRead(getToken())).data); } catch (e) {} }
+      const res = await runSearch(key, base.settings, base.leads, say);
+      await commit({ type: 'addLeads', leads: res.leads, at: new Date().toISOString(), offset: res.offset });
+      res.leads.forEach(l => known.current.add(l.id));
+      say('Gotowe');
+      setSearch({ running: false, log: [...log], result: res });
+      notify(res.leads.length ? `Nowi klienci: ${res.leads.length}` : 'Nic nowego', res.leads.length ? res.leads.map(l => l.org).slice(0, 3).join(', ') : `Sprawdzono ${res.searched} zapytań`);
+    } catch (e) {
+      setSearch({ running: false, log: [...log], result: { error: e.msg || fcError(e), leads: [], credits: 0 } });
+    }
+  };
+  const scoreNow = async () => {
+    const key = getStore(FC_KEY); if (!key || search.running) return;
+    const log = []; const say = m => { log.push(m); setSearch(s => ({ ...s, log: [...log] })); };
+    setSearch({ running: true, log: [], result: null });
+    try {
+      const res = await scoreExisting(key, data.leads, say);
+      if (res.count) await commit({ type: 'patchLeads', patches: res.patches });
+      say('Gotowe');
+      setSearch({ running: false, log: [...log], result: { leads: [], credits: res.credits, scored: res.count } });
+    } catch (e) { setSearch({ running: false, log: [...log], result: { error: fcError(e), leads: [], credits: 0 } }); }
+  };
+  const ghDisconnect = () => { setToken(''); setGh(false); toast('Odłączono GitHuba', 'Token usunięty z tej przeglądarki'); };
+
+  // Zapis: czytamy aktualny plik, nakładamy zmianę i zapisujemy. Bez połączenia zmiana czeka w kolejce.
+  const commit = async op => {
+    setData(d => applyOp(d, op));
+    const queue = [...getPending(), op];
+    const tok = getToken();
+    if (tok) { setPending(queue); await flushGh(tok); return; }
+    if (handleRef.current && conn === 'ok') {
+      try {
+        const cur = await readViaHandle(handleRef.current);
+        const next = queue.reduce(applyOp, cur); next.updated = new Date().toISOString();
+        await writeViaHandle(handleRef.current, next); setPending([]);
+        next.leads.forEach(l => known.current.add(l.id)); setData(next);
+        return;
+      } catch (e) { setConn('permission'); toast('Nie udało się zapisać', 'Kliknij „Zezwól na zapis”'); }
+    }
+    setPending(queue);
+  };
+  const patchLead = (id, patch) => commit({ type: 'lead', id, patch });
+  const patchSettings = patch => commit({ type: 'settings', patch });
+
+  const connect = async () => {
+    try {
+      let h = handleRef.current;
+      if (h && (await h.requestPermission({ mode: 'readwrite' })) === 'granted') { /* ok */ }
+      else {
+        h = await window.showDirectoryPicker({ id: 'klienci-dane', mode: 'readwrite' });
+        await h.getFileHandle('leady.js');
+        await saveHandle(h);
+      }
+      handleRef.current = h; setConn('ok');
+      const cur = await readViaHandle(h);
+      const queue = getPending();
+      if (queue.length) { const next = queue.reduce(applyOp, cur); next.updated = new Date().toISOString(); await writeViaHandle(h, next); setPending([]); accept(next, true); toast('Zapis włączony', `Zapisano ${queue.length} ${plural(queue.length, 'zmianę', 'zmiany', 'zmian')}`); }
+      else { accept(cur, true); toast('Zapis włączony', 'Zmiany będą trafiać do pliku'); }
+    } catch (e) {
+      if (e && e.name === 'NotFoundError') toast('To nie ten folder', 'Wskaż folder prototyp/dane, w którym jest leady.js');
+      else if (e && e.name !== 'AbortError') toast('Nie udało się włączyć zapisu');
+    }
+  };
+
+  useEffect(() => {
+    if (!fsSupported) return;
+    loadHandle().then(async h => {
+      if (!h) return;
+      handleRef.current = h;
+      const p = await h.queryPermission({ mode: 'readwrite' });
+      setConn(p === 'granted' ? 'ok' : 'permission');
+    }).catch(() => {});
+  }, []);
+  useEffect(() => { const t = setInterval(() => refresh(false), 120000); return () => clearInterval(t); }, [conn, gh]);
+  useEffect(() => { if (getToken()) refresh(true); }, []);
+  useEffect(() => { if (!session) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [session]);
+
+  if (!data) return <StartScreen ghConnect={ghConnect} />;
+
+  const go = (p, tab) => { setPage(p); setOpenId(null); if (p === 'leady' && tab) setLeadTab(tab); if (p === 'wiadomosci') { setMsgTab(tab || 'szkice'); setMsgSel(null); } };
+  const counts = d => ({ sent: d.leads.filter(l => l.sentAt).length, replied: d.leads.filter(l => REPLIED.includes(l.status)).length, talks: d.leads.filter(l => l.status === 'rozmowa' || l.status === 'zlecenie').length, orders: d.leads.filter(l => l.status === 'zlecenie').length, all: d.leads.length });
+  const toggleSession = () => {
+    if (!session) { setSession({ start: Date.now(), before: counts(data) }); setNow(Date.now()); toast('Sesja rozpoczęta', 'Stoper działa. Kliknij „Zakończ” na koniec'); return; }
+    const c = counts(data), b = session.before;
+    const minutes = Math.max(1, Math.round((Date.now() - session.start) / 60000));
+    const entry = { id: 'S' + Date.now(), date: iso(TODAY), minutes, newLeads: Math.max(0, c.all - b.all), sent: c.sent - b.sent, replies: c.replied - b.replied, talks: c.talks - b.talks, orders: c.orders - b.orders };
+    commit({ type: 'session', entry }); setSession(null);
+    toast('Sesja zapisana', `${minutes} min · wysłane ${entry.sent}`);
+  };
+  const elapsed = session ? Math.floor((now - session.start) / 1000) : 0;
+  const lead = data.leads.find(l => l.id === openId);
+  const badge = { leady: data.leads.filter(l => l.status === 'nowy' || l.status === 'oceniony').length, wiadomosci: data.leads.filter(l => l.status === 'do_wyslania').length + data.leads.filter(isFollowDue).length };
+  const current = NAV.find(n => n.id === page);
+  const pending = getPending().length;
+
+  const SessionControl = ({ compact }) => (
+    <button onClick={toggleSession} className={cn('flex items-center gap-3 rounded-lg border transition-colors duration-150', compact ? 'h-8 px-3' : 'h-10 w-full px-3', session ? 'border-accent/40 bg-accent/10 text-fg' : 'border-fg/[0.08] bg-raised text-fg2 hover:text-fg')}>
+      {session ? <span className="h-2 w-2 rounded-full bg-accent" /> : <Icon name="play" className="h-3.5 w-3.5" />}
+      <span className="font-mono text-[13px] tabular-nums">{tc(elapsed)}</span>
+      {!compact && <span className="ml-auto text-[13px]">{session ? 'Zakończ' : 'Start'}</span>}
+    </button>
+  );
+  const SaveState = () => gh
+    ? <span className="hidden items-center gap-2 font-mono text-xs text-fg3 lg:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-pos" />GitHub połączony{pending > 0 && <span className="text-accent">{pending}</span>}</span>
+    : conn === 'ok'
+    ? <span className="hidden items-center gap-2 font-mono text-xs text-fg3 lg:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-pos" />zapis włączony</span>
+    : conn === 'unsupported'
+      ? <span className="hidden font-mono text-xs text-fg3 lg:inline">dane: kopia z dysku, bez GitHuba</span>
+      : <Button variant="secondary" size="sm" onClick={() => go('ustawienia')}><span className="h-1.5 w-1.5 rounded-full bg-accent" />Dane z dysku, połącz z GitHubem{pending > 0 && <span className="font-mono text-xs text-accent">{pending}</span>}</Button>;
+
+  return (
+    <div className="flex min-h-screen">
+      <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-fg/[0.06] bg-side md:flex">
+        <div className="flex h-14 items-center px-5"><div className="leading-tight"><div className="text-base font-medium">Klienci</div><div className="font-mono text-[11px] text-fg3">pawelmotion</div></div></div>
+        <div className="px-3 pt-6">
+          <div className="px-2 pb-2 text-xs text-fg3">Nawigacja</div>
+          <nav className="space-y-0.5">
+            {NAV.map(n => (
+              <button key={n.id} onClick={() => go(n.id)} className={cn('flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-sm transition-colors duration-150', page === n.id ? 'bg-raised text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-fg/[0.06]' : 'text-fg2 hover:bg-fg/[0.03] hover:text-fg')}>
+                <Icon name={n.icon} className={cn('h-4 w-4', page === n.id ? 'text-fg' : 'text-fg3')} />{n.label}
+                {badge[n.id] > 0 && <span className="ml-auto font-mono text-xs text-fg3">{badge[n.id]}</span>}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 border-b border-fg/[0.06] bg-bg/90 backdrop-blur">
+          <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-8">
+            <div className="flex items-center gap-2.5 text-sm text-fg2"><Icon name={current.icon} className="h-4 w-4 text-fg3" />{current.label}</div>
+            <div className="flex items-center gap-3">
+              <SaveState />
+              <Button variant="accent" size="sm" onClick={() => setSearchOpen(true)}><Icon name="search" /><span className="hidden sm:inline">Nowi klienci</span></Button>
+            </div>
+          </div>
+          <nav className="scroll-thin flex gap-1 overflow-x-auto border-t border-fg/[0.06] px-2 py-2 md:hidden">
+            {NAV.map(n => <button key={n.id} onClick={() => go(n.id)} className={cn('flex h-8 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px]', page === n.id ? 'bg-raised text-fg' : 'text-fg3')}><Icon name={n.icon} className="h-4 w-4" />{n.label}</button>)}
+          </nav>
+        </header>
+        <main key={page} className="a-rise mx-auto w-full max-w-[1520px] flex-1 p-4 sm:p-8">
+          {page === 'pulpit' && <Dashboard data={data} go={go} />}
+          {page === 'leady' && <Leads data={data} tab={leadTab} setTab={setLeadTab} openLead={setOpenId} />}
+          {page === 'wiadomosci' && <Messages data={data} patchLead={patchLead} tab={msgTab} setTab={setMsgTab} selected={msgSel} setSelected={setMsgSel} openLead={setOpenId} />}
+          {page === 'ustawienia' && <Settings data={data} patchSettings={patchSettings} conn={conn} connect={connect} refresh={() => refresh(false)} gh={gh} ghConnect={ghConnect} ghDisconnect={ghDisconnect} fcKey={fcKey} saveFcKey={saveFcKey} />}
+        </main>
+      </div>
+      <LeadSheet lead={lead} patchLead={patchLead} close={() => setOpenId(null)} goMessage={id => { setOpenId(null); setPage('wiadomosci'); setMsgTab('szkice'); setMsgSel(id); }} />
+      <SearchInfo open={searchOpen} onClose={() => setSearchOpen(false)} lastSearch={data.lastSearch} search={search} start={startSearch} scoreNow={scoreNow} unscored={data.leads.filter(l => l.status === 'nowy').length} hasKey={!!fcKey} goSettings={() => go('ustawienia')} />
+      <Toaster />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
