@@ -415,6 +415,23 @@ function makeDraft(l) {
     : { subject: `Pomysł na animację: ${title}`, body: `Dzień dobry,\n\npiszę w związku z informacją na Państwa stronie: „${title}”.\n\n${idea}\n\n${link}Czy mogę przesłać krótką propozycję?\n\n[Twój podpis]` };
 }
 
+// Przykłady z portfolio w treści maila: odczyt, zamiana, dodanie, usunięcie (akapit z linkiem).
+const projUrl = (p, en) => en ? p.en : p.pl;
+const linkedProjects = body => { const out = []; (body || '').split('\n\n').forEach((par, i) => { const p = PORTFOLIO.find(x => par.includes(x.pl) || par.includes(x.en)); if (p) out.push({ p, i, extra: /^(Inny przykład|Another example)/.test(par) }); }); return out; };
+function exampleSentence(p, en, extra) {
+  const t = TEMPLATE_IDEAS[p.id];
+  if (extra) return en ? `Another example: "${p.title}": ${p.en}.` : `Inny przykład: „${p.title}” (${p.type.charAt(0).toLowerCase() + p.type.slice(1)}): ${p.pl}.`;
+  return en ? `I made a similar piece for "${p.title}": ${p.en}.${t ? ' ' + t.en[1] : ''}` : `Podobną realizację zrobiłem przy projekcie „${p.title}”: ${p.pl}.${t ? ' ' + t.pl[1] : ''}`;
+}
+function swapExample(body, idx, p, en, extra) { const pars = body.split('\n\n'); pars[idx] = exampleSentence(p, en, extra); return pars.join('\n\n'); }
+function removeExample(body, idx) { const pars = body.split('\n\n'); pars.splice(idx, 1); return pars.join('\n\n'); }
+function addExample(body, p, en) {
+  const pars = body.split('\n\n'); const links = linkedProjects(body);
+  let at = links.length ? links[links.length - 1].i + 1 : pars.findIndex(x => /\?\s*$/.test(x.trim()));
+  if (at < 0) at = Math.max(0, pars.length - 1);
+  pars.splice(at, 0, exampleSentence(p, en, links.length > 0)); return pars.join('\n\n');
+}
+
 // Oceń leady bez oceny: pobiera stronę źródła (1 kredyt na lead).
 async function scoreExisting(key, leads, say) {
   const todo = leads.filter(l => l.status === 'nowy' && l.source).slice(0, FC_LIMIT.scrapes);
@@ -783,6 +800,36 @@ function LeadSheet({ lead, patchLead, close, goMessage }) {
 }
 
 /* ============ Strona: Wiadomości ============ */
+function Examples({ msg, en, onChange }) {
+  const links = linkedProjects(msg.body);
+  const used = new Set(links.map(l => l.p.id));
+  const [add, setAdd] = useState('');
+  return (
+    <div className="space-y-3 rounded-lg border border-fg/[0.08] bg-side p-4">
+      <div className="text-sm text-fg2">Przykłady w mailu</div>
+      {links.length === 0 && <p className="text-[0.9375rem] text-fg3">W treści nie ma linku do projektu z portfolio.</p>}
+      {links.map(({ p, i, extra }) => (
+        <div key={i} className="flex flex-wrap items-center gap-2">
+          <a href={projUrl(p, en)} target="_blank" rel="noopener" className="min-w-0 flex-1 text-sm text-fg underline decoration-fg/30 underline-offset-4 hover:decoration-fg">{p.title}<span className="ml-2 text-[0.8125rem] text-fg3 no-underline">{p.type}</span></a>
+          <Button size="sm" variant="secondary" onClick={() => window.open(projUrl(p, en), '_blank', 'noopener')}><Icon name="external" />Zobacz</Button>
+          <Select value="" onChange={e => { const np = PORTFOLIO.find(x => x.id === Number(e.target.value)); if (np) onChange(swapExample(msg.body, i, np, en, extra), extra ? undefined : np.id); }} className="w-40">
+            <option value="">Zamień na…</option>
+            {PORTFOLIO.filter(x => !used.has(x.id)).map(x => <option key={x.id} value={x.id}>{x.title}</option>)}
+          </Select>
+          <Button size="sm" variant="ghost" onClick={() => onChange(removeExample(msg.body, i), extra ? undefined : null)}>Usuń</Button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={add} onChange={e => setAdd(e.target.value)} className="min-w-[200px] flex-1">
+          <option value="">Dodaj przykład…</option>
+          {PORTFOLIO.filter(x => !used.has(x.id)).map(x => <option key={x.id} value={x.id}>{x.title} ({x.type})</option>)}
+        </Select>
+        <Button size="sm" variant="secondary" disabled={!add} onClick={() => { const np = PORTFOLIO.find(x => x.id === Number(add)); onChange(addExample(msg.body, np, en), links.length ? undefined : np.id); setAdd(''); }}>Dodaj</Button>
+      </div>
+    </div>
+  );
+}
+
 function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLead }) {
   // Tylko leady zatwierdzone do wysłania (zatwierdza się w Leady), także bez szkicu.
   const drafts = data.leads.filter(l => l.status === 'do_wyslania')
@@ -838,6 +885,7 @@ function Messages({ data, patchLead, tab, setTab, selected, setSelected, openLea
                 <div className="flex items-center justify-between"><Label>Treść</Label><span className={cn('font-mono text-xs tabular-nums', words > 130 ? 'text-accent' : 'text-fg3')}>{words} / 120 słów</span></div>
                 <Textarea rows="14" value={msg.body} onChange={e => setMsg({ ...msg, body: e.target.value })} onBlur={persist} />
               </div>
+              {!noDraft && tab !== 'follow' && <Examples msg={msg} en={cur.lang === 'EN'} onChange={(body, mainId) => { const d = { ...msg, body }; setMsg(d); patchLead(cur.id, mainId !== undefined ? { draft: d, projectId: mainId, projectTitle: '', projectType: '', projectUrl: '' } : { draft: d }); }} />}
               <p className="flex items-start gap-2 text-[0.9375rem] text-fg3"><Icon name="info" className="mt-0.5 h-4 w-4" />{noDraft ? 'Ten lead nie ma jeszcze szkicu. Kliknij „Wstaw szkic z szablonu” albo napisz wiadomość sam. Sprawdź fakty w źródle i wyślij ze swojej poczty' : 'Szkic przygotowało AI lub szablon. Sprawdź fakty w źródle i wyślij sam, pojedynczo, ze swojej poczty'}</p>
             </div>
             <div className="mt-6 flex flex-wrap gap-2 border-t border-fg/[0.06] p-6">
